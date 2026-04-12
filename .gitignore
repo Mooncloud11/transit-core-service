@@ -1,0 +1,8 @@
+ai-engine/venv/
+ai-engine/__pycache__/
+*.pyc
+backend/target/
+backend/.mvn/
+backend/mvnw
+backend/mvnw.cmd
+.vscode/
