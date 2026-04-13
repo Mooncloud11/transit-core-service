@@ -8,8 +8,8 @@ public class TransitResponse {
     private int predicted_arrival_minutes;
     private String crowd_level;
     private double confidence_score;
-    private String message;
-
+    private String message; 
+    
     // Default No-Argument Constructor (Strictly required for JSON Deserialization)
     public TransitResponse() {}
 

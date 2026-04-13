@@ -1,0 +1,103 @@
+/* Temel Renk Değişkenleri */
+:root {
+    --main-bg: #263680;      /* Figma'daki koyu lacivert */
+    --input-bg: #E0E0E0;     /* Gri kutular */
+    --text-color: #000000;
+    --placeholder-color: #757575;
+}
+
+body {
+    margin: 0;
+    font-family: 'Inter', sans-serif; /* Google Fontunu Kullandık */
+    background-color: var(--main-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Ekranı dikeyde ortalamak için */
+}
+
+/* Figma'daki Phone Frame Genişliği */
+.app-container {
+    width: 393px;
+    height: 852px;
+    background-color: var(--main-bg);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Dışarı taşanları gizle (Clip content mantığı) */
+}
+
+/* Üst Resim Bölümü */
+.hero-section {
+    position: relative;
+    width: 100%;
+    height: 300px; /* Yaklaşık bir yükseklik */
+}
+
+.hero-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Resmi sığdır */
+    border-radius: 0 0 20px 20px; /* Alt köşeleri yuvarla */
+}
+
+/* Hava Durumu Grubu */
+.weather-group {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 10; /* Resmin üstünde kalsın */
+}
+
+.weather-text {
+    color: white;
+    font-weight: 600;
+}
+
+/* Input Kutuları */
+.input-container {
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px; /* Kutular arası boşluk (Figma Auto Layout Gap) */
+}
+
+.input-box {
+    background: var(--input-bg);
+    padding: 15px 20px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.placeholder {
+    color: var(--placeholder-color);
+}
+
+/* Sonraki Sayfa Butonu (Saf CSS) */
+.btn-next {
+    background-color: #E0E0E0;
+    color: #000000;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 50px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    position: absolute;
+    bottom: 50px;
+    right: 20px;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+/* Farenin üzerine geldiğindeki efekti */
+.btn-next:hover {
+    background-color: #d0d0d0;
+    transform: scale(1.05);
+}
