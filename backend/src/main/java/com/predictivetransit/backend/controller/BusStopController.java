@@ -4,6 +4,7 @@ import com.predictivetransit.backend.model.BusStop;
 import com.predictivetransit.backend.repository.BusStopRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -26,5 +27,13 @@ public class BusStopController {
     public List<BusStop> getAllStops() {
         // Veritabanındaki tüm durakları liste olarak döner
         return busStopRepository.findAll();
+    }
+    /**
+     * Örnek İstek: GET /api/stops/search?query=Merkez
+     */
+    @GetMapping("/search")
+    public List<BusStop> searchStops(@RequestParam String query) {
+        // Kullanıcıdan gelen "query" kelimesini alıp veritabanında aratır
+        return busStopRepository.findByStopNameContainingIgnoreCase(query);
     }
 }
