@@ -4,12 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transit Core Service</title>
+    <meta name="description" content="Akıllı toplu taşıma güzergah planlayıcı">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <main class="app-container">
-        
+    <main class="app-container" id="appContainer">
+
+        <div class="status-bar">
+            <span id="statusTime">09:41</span>
+        </div>
+
         <section class="hero-section">
             <div class="weather-group">
                 <span class="weather-text">🌧️ Yağış: %80</span>
@@ -17,20 +22,28 @@
             <img src="assets/hero-bg.jpg" alt="Şehir Görseli" class="hero-image">
         </section>
 
-        <section class="input-container">
-            <div class="input-box" id="input-start">
-                <span class="placeholder">Başlangıç Noktası</span>
-                <img src="assets/icon-arrow.svg" alt="Aşağı Ok" class="icon-arrow">
+        <section class="inputs-section">
+            <div class="input-wrapper" id="start-container" style="z-index: 2;">
+                <div class="input-box">
+                    <input type="text" id="start-input" class="search-input" placeholder="Başlangıç Noktası" autocomplete="off">
+                    <img src="assets/icon-arrow.svg" alt="Ok" class="icon-arrow">
+                </div>
+                <ul class="dropdown-list" id="start-dropdown"></ul>
             </div>
-            
-            <div class="input-box" id="input-end">
-                <span class="placeholder">Bitiş Noktası</span>
-                <img src="assets/icon-arrow.svg" alt="Aşağı Ok" class="icon-arrow">
+            <div class="input-wrapper" id="end-container" style="z-index: 1;">
+                <div class="input-box">
+                    <input type="text" id="end-input" class="search-input" placeholder="Varış Noktası" autocomplete="off">
+                    <img src="assets/icon-arrow.svg" alt="Ok" class="icon-arrow">
+                </div>
+                <ul class="dropdown-list" id="end-dropdown"></ul>
             </div>
         </section>
 
-        <button class="btn-next" onclick="window.location.href='map.html'">Sonraki Sayfa</button>
+        <button class="btn-next" id="btnNext">Güzergah Bul</button>
 
     </main>
+
+    <script src="data.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
