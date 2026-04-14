@@ -1,11 +1,13 @@
 package com.predictivetransit.backend.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
 import com.predictivetransit.backend.model.BusStop;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
 
-@Repository
 public interface BusStopRepository extends JpaRepository<BusStop, String> {
-    // ID tipi String çünkü CSV'de stop_id "STOP_101" gibi metinsel verilerdir.
+    
+    // JPA Derived Query: İsminde (StopName) belirli bir metni (Containing) 
+    // büyük/küçük harf duyarsız (IgnoreCase) olarak arar.
+    List<BusStop> findByStopNameContainingIgnoreCase(String keyword);
+    
 }
