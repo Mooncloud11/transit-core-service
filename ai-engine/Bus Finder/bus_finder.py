@@ -1,151 +1,255 @@
-"""
-bus_finder.py
--------------
-Girdi : stop_id (str)
-Çıktı : {
-    "stop_id":           str,
-    "line_id":           str,
-    "trip_id":           str,
-    "estimated_minutes": float,
-    "ai_explanation":    str,
-    "crowding_level":    str,
-    "avg_passengers_waiting": int,
-    "weather_condition": str,
-    "temperature_c":     float,
-    "status":            str   # "ok" | "no_data" | "error"
-}
-"""
-
+import sys
+import subprocess
 import json
-import os
-from datetime import datetime
-import pandas as pd
-from anthropic import Anthropic
 
-DATA_DIR = os.path.dirname(os.path.abspath(__file__))
+# =====================================================================
+# 0. AUTOMATIC LIBRARY INSTALLATION
+# =====================================================================
+try:
+    from google import genai
+    import pandas as pd
+except ImportError:
+    print("[INFO] Required libraries not found. Installing...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "google-genai", "pandas"])
+    from google import genai
+    import pandas as pd
 
-def load_data():
-    stop_arrivals   = pd.read_csv(os.path.join(DATA_DIR, "stop_arrivals.csv"))
-    bus_stops       = pd.read_csv(os.path.join(DATA_DIR, "bus_stops.csv"))
-    passenger_flow  = pd.read_csv(os.path.join(DATA_DIR, "passenger_flow.csv"))
-    weather_obs     = pd.read_csv(os.path.join(DATA_DIR, "weather_observations.csv"))
-    return stop_arrivals, bus_stops, passenger_flow, weather_obs
+    print("[INFO] Installation successful!\n")
 
 
-def find_next_bus(stop_id: str) -> dict:
+# =====================================================================
+# 1. BIG DATA: DETERMINISTIC TIME-BASED FETCHING (NEXT TRIP ALGORITHM)
+# =====================================================================
+def fetch_all_data_for_line(line_code, target_hour, target_minute):
+    """
+    Fetches data from databases filtered by the line_code.
+    Calculates the exact closest upcoming trip based on the inputted time.
+    """
+    raw_data = {
+        "line_code": line_code,
+        "input_time": f"{target_hour:02d}:{target_minute:02d}"
+    }
+
+    target_mins_since_midnight = target_hour * 60 + target_minute
+
     try:
-        stop_arrivals, bus_stops, passenger_flow, weather_obs = load_data()
+        # 1. BUS STOPS
+        df_stops = pd.read_csv("bus_stops.csv")
+        line_stops = df_stops[df_stops['line_id'] == line_code]
+        raw_data["total_stops"] = len(line_stops)
+        if len(line_stops) > 0:
+            raw_data["line_name"] = line_stops.iloc[0]['line_name']
 
-        # Durak var mı?
-        if bus_stops[bus_stops["stop_id"] == stop_id].empty:
-            return {"status": "no_data", "message": f"'{stop_id}' ID'li durak bulunamadı."}
+        # 2. BUS TRIPS (Find the EXACT next trip deterministically)
+        df_trips = pd.read_csv("bus_trips.csv")
+        df_trips['planned_departure'] = pd.to_datetime(df_trips['planned_departure'], errors='coerce')
+        line_trips = df_trips[df_trips['line_id'] == line_code].copy()
 
-        # O durağa ait kayıtları çek, en güncel olanı al
-        arrivals = stop_arrivals[stop_arrivals["stop_id"] == stop_id].copy()
-        if arrivals.empty:
-            return {"status": "no_data", "message": f"'{stop_id}' durağına ait varış verisi yok."}
+        if line_trips.empty:
+            return {"error": f"No trip data found for line {line_code}"}
 
-        arrivals["actual_arrival"] = pd.to_datetime(arrivals["actual_arrival"])
-        latest = arrivals.sort_values("actual_arrival", ascending=False).iloc[0]
+        # Calculate minutes since midnight for all trips
+        line_trips['mins_since_midnight'] = line_trips['planned_departure'].dt.hour * 60 + line_trips[
+            'planned_departure'].dt.minute
 
-        raw_minutes       = float(latest["minutes_to_next_bus"])
-        delay_min         = float(latest["delay_min"])
-        traffic_level     = latest["traffic_level"]
-        speed_factor      = float(latest["speed_factor"])
-        trip_id           = latest["trip_id"]
-        line_id           = latest["line_id"]
+        # Filter upcoming trips
+        upcoming_trips = line_trips[line_trips['mins_since_midnight'] >= target_mins_since_midnight]
 
-        # Yolcu kalabalığı - mevcut saat ve durağa göre en yakın kayıt
-        current_hour = datetime.now().hour
-        current_dow  = datetime.now().weekday() + 1  # 1-7
-
-        pf = passenger_flow[
-            (passenger_flow["stop_id"] == stop_id) &
-            (passenger_flow["line_id"] == line_id)
-        ].copy()
-
-        if not pf.empty:
-            pf["hour_diff"] = abs(pf["hour_of_day"] - current_hour)
-            pf["dow_diff"]  = abs(pf["day_of_week"] - current_dow)
-            pf["score"]     = pf["hour_diff"] + pf["dow_diff"]
-            pf_row          = pf.sort_values("score").iloc[0]
-            crowding_level          = pf_row["crowding_level"]
-            avg_passengers_waiting  = int(pf_row["avg_passengers_waiting"])
+        if not upcoming_trips.empty:
+            # Sort by time and date to ensure absolute determinism (always the exact same row)
+            closest_trip = upcoming_trips.sort_values(by=['mins_since_midnight', 'date']).iloc[0]
         else:
-            crowding_level         = "unknown"
-            avg_passengers_waiting = -1
+            # Fallback: If time is too late (e.g., 23:50), wrap around and find the first trip of the next day
+            closest_trip = line_trips.sort_values(by=['mins_since_midnight', 'date']).iloc[0]
 
-        # Hava durumu - en son gözlem
-        weather_obs["timestamp"] = pd.to_datetime(weather_obs["timestamp"])
-        latest_weather = weather_obs.sort_values("timestamp", ascending=False).iloc[0]
-        weather_condition = latest_weather["weather_condition"]
-        temperature_c     = float(latest_weather["temperature_c"])
+        # Extract precise data from the found trip
+        analyzed_hour = closest_trip['planned_departure'].hour
+        analyzed_minute = closest_trip['planned_departure'].minute
 
-        # --- AI KAPALI: Hazır olunca aşağıdaki bloğun yorumunu kaldır ---
-        # estimated_minutes, ai_explanation = ask_claude(
-        #     stop_id=stop_id,
-        #     trip_id=trip_id,
-        #     raw_minutes=raw_minutes,
-        #     delay_min=delay_min,
-        #     weather_condition=weather_condition,
-        #     traffic_level=traffic_level,
-        #     speed_factor=speed_factor,
-        # )
+        raw_data["tour_number"] = str(closest_trip['trip_id'])
+        raw_data["closest_trip_time"] = f"{analyzed_hour:02d}:{analyzed_minute:02d}"
+        raw_data["avg_historical_delay_min"] = round(line_trips['total_delay_min'].mean(), 2)
+        raw_data["common_traffic_level"] = closest_trip['traffic_level']
 
-        return {
-            "stop_id":                stop_id,
-            "line_id":                line_id,
-            "trip_id":                trip_id,
-            "estimated_minutes":      raw_minutes,
-            "ai_explanation":         "AI devre disi - ham veri",
-            "crowding_level":         crowding_level,
-            "avg_passengers_waiting": avg_passengers_waiting,
-            "weather_condition":      weather_condition,
-            "temperature_c":          temperature_c,
-            "status":                 "ok",
-        }
+        # 3. PASSENGER FLOW (Filtered by the exact hour of the closest trip)
+        df_flow = pd.read_csv("passenger_flow.csv")
+        line_flow = df_flow[(df_flow['line_id'] == line_code) & (df_flow['hour_of_day'] == analyzed_hour)]
+        if line_flow.empty: line_flow = df_flow[df_flow['line_id'] == line_code]
 
+        if not line_flow.empty:
+            raw_data["avg_passengers_waiting"] = round(line_flow['avg_passengers_waiting'].mean(), 1)
+            raw_data["most_common_crowding"] = line_flow['crowding_level'].mode()[0]
+
+        # 4. STOP ARRIVALS (Filtered by the exact hour)
+        df_arrivals = pd.read_csv("stop_arrivals.csv")
+        line_arrivals = df_arrivals[
+            (df_arrivals['line_id'] == line_code) & (df_arrivals['hour_of_day'] == analyzed_hour)]
+        if line_arrivals.empty: line_arrivals = df_arrivals[df_arrivals['line_id'] == line_code]
+
+        if not line_arrivals.empty:
+            raw_data["avg_minutes_to_next_bus"] = round(line_arrivals['minutes_to_next_bus'].mean(), 1)
+
+        # 5. WEATHER OBSERVATIONS (Filtered by the exact hour)
+        df_weather = pd.read_csv("weather_observations.csv")
+        df_weather['timestamp'] = pd.to_datetime(df_weather['timestamp'], errors='coerce')
+        hour_weather = df_weather[df_weather['timestamp'].dt.hour == analyzed_hour]
+        if hour_weather.empty: hour_weather = df_weather
+
+        if not hour_weather.empty:
+            raw_data["current_weather"] = hour_weather['weather_condition'].mode()[0]
+            raw_data["transit_delay_risk"] = round(float(hour_weather['transit_delay_risk'].mean()), 3)
+            raw_data["passenger_demand_multiplier"] = round(float(hour_weather['passenger_demand_multiplier'].mean()),
+                                                            2)
+
+        return raw_data
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"error": f"Error reading databases: {str(e)}"}
 
 
-def ask_claude(stop_id, trip_id, raw_minutes, delay_min, weather_condition, traffic_level, speed_factor):
-    client = Anthropic()
+# =====================================================================
+# 2. AI CALCULATION ENGINE (STRICT JSON OUTPUT)
+# =====================================================================
+class GeminiCalculator:
+    def __init__(self, api_keys, models):
+        self.api_keys = api_keys
+        self.models = models
+        self.current_key_idx = 0
+        self.current_model_idx = 0
 
-    prompt = f"""
-Aşağıdaki otobüs verilerine bakarak tahmini varış süresini hesapla.
+    def analyze_and_calculate(self, raw_data):
+        prompt = f"""
+        Using the raw data below, perform 2 mathematical calculations and return the result ONLY IN A VALID JSON FORMAT. 
+        Do not use any greetings, markdown, explanations, or extra text.
+        ALL generated text MUST be in English.
+        Take into consideration the 'closest_trip_time' and 'current_weather' when generating advices.
 
-Durak        : {stop_id}
-Sefer        : {trip_id}
-Ham süre     : {raw_minutes:.1f} dakika
-Gecikme      : {delay_min:.1f} dakika
-Hava         : {weather_condition}
-Trafik       : {traffic_level}
-Hız faktörü  : {speed_factor:.3f}
+        RAW DATA:
+        {json.dumps(raw_data, ensure_ascii=False)}
 
-Sadece şu JSON formatında yanıt ver, başka hiçbir şey yazma:
-{{"estimated_minutes": <sayı>, "explanation": "<kısa Türkçe açıklama>"}}
-""".strip()
+        CALCULATIONS:
+        1. real_time_delay_min = (avg_historical_delay_min * (1 + transit_delay_risk)) -> Round to 2 decimal places.
+        2. estimated_passengers = (avg_passengers_waiting * passenger_demand_multiplier) -> Round to the nearest integer.
 
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=256,
-        messages=[{"role": "user", "content": prompt}],
-    )
+        PLEASE RETURN ONLY A JSON MATCHING THE EXACT STRUCTURE BELOW:
+        {{
+            "tour_number": "{raw_data.get('tour_number', 'Unknown')}",
+            "line_code": "{raw_data.get('line_code', 'Unknown')}",
+            "closest_trip_time": "{raw_data.get('closest_trip_time', 'Unknown')}",
+            "current_weather": "{raw_data.get('current_weather', 'Unknown')}",
+            "real_time_delay_min": 0.00,
+            "estimated_passengers": 0,
+            "passenger_advice": "One short sentence of advice for passengers.",
+            "driver_advice": "One short sentence of advice for the driver."
+        }}
+        """
 
-    raw_text = message.content[0].text.strip()
+        while self.current_key_idx < len(self.api_keys):
+            try:
+                client = genai.Client(api_key=self.api_keys[self.current_key_idx])
+            except Exception as e:
+                self.current_key_idx += 1
+                continue
+
+            while self.current_model_idx < len(self.models):
+                model_name = self.models[self.current_model_idx]
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt
+                    )
+
+                    response_text = response.text.strip()
+                    if response_text.startswith("```json"):
+                        response_text = response_text[7:]
+                    if response_text.endswith("```"):
+                        response_text = response_text[:-3]
+
+                    ai_json = json.loads(response_text.strip())
+                    return ai_json
+
+                except Exception as e:
+                    print(f"[WARNING] Model {model_name} failed. Error: {e}")
+                    self.current_model_idx += 1
+
+            self.current_key_idx += 1
+            self.current_model_idx = 0
+
+        return {"error": "AI systems are unreachable. Please use local data."}
+
+
+# =====================================================================
+# 3. MAIN EXECUTION LOGIC
+# =====================================================================
+def main():
+    API_KEYS = [
+        "AIzaSyCBKX0Fs1l9-Pb6p8szWBpLfHBE2XattaI"  # Kendi API anahtarını eklemeyi unutma
+    ]
+
+    MODELS = ["gemini-flash-latest"]
+
+    print("=" * 50)
+    print("🚀 SMART BUS PREDICTION SYSTEM 🚀")
+    print("=" * 50)
+
+    # 1. Get Line Code
+    bus_code = input("Enter the bus code to analyze (e.g., L01, L02): ").strip().upper()
+    if not bus_code:
+        print("Invalid bus code!")
+        return
+
+    # 2. Get Time with Decimal Parsing Support
+    time_input = input("Enter the time (e.g., 7.30, 08:15, or simply 8): ").strip()
+
+    # Parse time logic (supports '7.30', '7:30', '7,30', '8')
+    time_input_cleaned = time_input.replace(':', '.').replace(',', '.')
 
     try:
-        clean = raw_text.replace("```json", "").replace("```", "").strip()
-        data = json.loads(clean)
-        return float(data["estimated_minutes"]), data["explanation"]
-    except Exception:
-        return raw_minutes, raw_text
+        if '.' in time_input_cleaned:
+            parts = time_input_cleaned.split('.')
+            target_hour = int(parts[0])
+            # Handle user typing "7.3" as 7:30
+            if len(parts[1]) == 1:
+                target_minute = int(parts[1] + "0")
+            else:
+                target_minute = int(parts[1][:2])
+        else:
+            target_hour = int(time_input_cleaned)
+            target_minute = 0
+
+        if not (0 <= target_hour <= 23) or not (0 <= target_minute <= 59):
+            raise ValueError
+
+    except ValueError:
+        print("[WARNING] Invalid time format entered. Defaulting to 08:00.")
+        target_hour = 8
+        target_minute = 0
+
+    print(f"\n[INFO] Finding the closest upcoming trip for {bus_code} after {target_hour:02d}:{target_minute:02d}...")
+
+    raw_data = fetch_all_data_for_line(bus_code, target_hour, target_minute)
+
+    if "error" in raw_data:
+        print(raw_data["error"])
+        return
+
+    print("\n" + "=" * 50)
+    print("📊 STAGE 1: RAW DATA EXTRACTED BY SYSTEM")
+    print("=" * 50)
+    print(json.dumps(raw_data, indent=4, ensure_ascii=False))
+
+    print("\n" + "=" * 50)
+    print("🤖 STAGE 2: AI CALCULATION (SIMPLIFIED JSON)")
+    print("=" * 50)
+    print("Calculating, please wait...\n")
+
+    ai_calculator = GeminiCalculator(API_KEYS, MODELS)
+    ai_analysis_json = ai_calculator.analyze_and_calculate(raw_data)
+
+    print(json.dumps(ai_analysis_json, indent=4, ensure_ascii=False))
+
+    print("\n" + "=" * 50)
+    print("✅ PROCESS COMPLETED")
 
 
-# Test
 if __name__ == "__main__":
-    import sys
-    stop = sys.argv[1] if len(sys.argv) > 1 else "STP-L01-03"
-    result = find_next_bus(stop)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    main()
