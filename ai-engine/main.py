@@ -5,13 +5,13 @@ from datetime import datetime
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
 
 # =====================================================================
 # AYARLAR & API KEY YÖNETİMİ
 # =====================================================================
 GEMINI_API_KEYS = [
-    "AIzaSyAtUtdlcYEBACkezzAv5P065F_ciCDobkU"
+    "AIzaSyAtUtdlcYEBACkezzAv5P065F_ciCDobkU",
+    # Yedek keylerini buraya ekleyebilirsin
 ]
 
 
@@ -25,7 +25,7 @@ class BusAI:
             api_key = self.api_keys[self.current_key_idx]
 
             if not api_key:
-                return {"error": "Lütfen geçerli bir API Key girin."}
+                return {"error": "API Key eksik."}
 
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
             payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -40,7 +40,6 @@ class BusAI:
                     if text_response.startswith("```"):
                         text_response = text_response.strip("`").replace("json\n", "", 1).replace("json", "", 1)
 
-                    # Gemini'den gelen metni Python Dict (JSON) objesine çeviriyoruz
                     return json.loads(text_response)
 
             except Exception as e:
@@ -50,7 +49,7 @@ class BusAI:
 
 
 # =====================================================================
-# VERİ İŞLEME
+# VERİ İŞLEME & PROMPT HAZIRLIĞI
 # =====================================================================
 def get_stop_name(stop_id, stops_df):
     df = stops_df[stops_df['stop_id'] == stop_id]
@@ -67,7 +66,7 @@ def prepare_ai_prompt(start_stop_id, end_stop_id):
         flow = pd.read_csv("passenger_flow.csv")
         weather = pd.read_csv("weather_observations.csv")
     except Exception as e:
-        raise Exception(f"CSV dosyası okunamadı: {e}")
+        raise Exception(f"CSV Database Hatası: {e}")
 
     start_data = stops[stops['stop_id'] == start_stop_id]
     end_data = stops[stops['stop_id'] == end_stop_id]
@@ -89,8 +88,8 @@ def prepare_ai_prompt(start_stop_id, end_stop_id):
     Time: {current_time} | Weather: {weather_cond}
     Transfer Needed: {is_transfer}
 
-    Output ONLY a strict JSON. NO markdown format.
-    Use 'status_color' strictly as 'GREEN' (low crowding), 'YELLOW' (moderate), or 'RED' (high crowding).
+    Output ONLY a strict JSON. NO markdown.
+    Use 'status_color' strictly as 'GREEN', 'YELLOW', or 'RED' based on crowding/delay.
     Format exactly like this:
     {{
       "route_steps": [
@@ -100,51 +99,47 @@ def prepare_ai_prompt(start_stop_id, end_stop_id):
           "planned_time": "HH:MM",
           "real_time": "HH:MM",
           "status_color": "GREEN|YELLOW|RED",
-          "status_text": "Sakin|Orta|Kalabalık"
+          "status_text": "Sakin|Orta|Kalabalik"
         }}
       ],
-      "ai_comment": "Yolculuk özeti."
+      "ai_comment": "Kısa analiz cümlesi."
     }}
     """
     return prompt
 
 
 # =====================================================================
-# FASTAPI KURULUMU
+# FASTAPI MİKROSERVİS KURULUMU
 # =====================================================================
-app = FastAPI(title="AI Bus Route API", version="1.0")
-
-# Frontend'den (React, Vue vb.) gelen istekleri engellememesi için CORS ayarı
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="Bus AI Microservice", version="1.1")
 
 ai_service = BusAI(GEMINI_API_KEYS)
 
 
-# Frontend'in bize göndereceği veri modeli
+# Java'dan gelecek verinin formatı
 class RouteRequest(BaseModel):
     start_stop_id: str
     end_stop_id: str
 
 
-@app.post("/api/v1/predict-route")
+# 1. Health Check Endpoint (Java sistemin ayakta olup olmadığını buradan anlar)
+@app.get("/health")
+async def health_check():
+    return {"status": "up", "service": "Bus AI Microservice"}
+
+
+# 2. Ana AI Endpoint'i
+@app.post("/api/ai/predict")
 async def predict_route(request: RouteRequest):
     try:
-        # 1. Prompt'u hazırla
         ai_prompt = prepare_ai_prompt(request.start_stop_id, request.end_stop_id)
-
-        # 2. Gemini'ye sor ve JSON yanıtı al
         ai_response = ai_service.call_gemini(ai_prompt)
 
-        # Eğer yapay zeka veya bağlantı hatası varsa
         if "error" in ai_response:
+            # Java'ya HTTP 500 (Internal Server Error) koduyla hatayı dön
             raise HTTPException(status_code=500, detail=ai_response["error"])
 
+        # Başarılıysa doğrudan JSON dön (Java bunu HTTP 200 ile alacak)
         return ai_response
 
     except Exception as e:
