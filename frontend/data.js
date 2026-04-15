@@ -1,9 +1,7 @@
 // =========================================
-//  DATA.JS – Tam Sürüm (UI + Backend API)
-//  Vahip'in Swagger Endpointleri ile Entegre
+//  DATA.JS – Tam Sürüm (UI + Backend API + AI Engine)
 // =========================================
 
-// 1. ARAYÜZ İSKELETİ (Harita çökmeksizin çalışsın diye)
 const TransitData = {
     hatlar: {
         L01: { id: "L01", ad: "Merkez - Üniversite", renk: "#4A90D9", duraklar: ["Merkez Terminal", "Belediye Meydanı", "Cumhuriyet Caddesi", "Atatürk Bulvarı", "Hürriyet Parkı", "Gül Mahallesi", "Çamlık Durağı", "Yeni Mahalle", "Sağlık Ocağı", "Kültür Merkezi", "Stadyum", "Rektörlük", "Mühendislik Fakültesi", "Üniversite Kampüsü"], aktifOtobus: { mevcutDurakIndex: 4, yogunluk: "red" }, tahminiSure: 3 },
@@ -14,33 +12,26 @@ const TransitData = {
     }
 };
 
-// 2. BACKEND API KATMANI (Swagger Adresleri)
 const TransitAPI = {
-    baseUrl: 'http://localhost:8080',
-    gercekDuraklar: [], // Backend'den gelen veriler burada tutulacak
+    baseUrl: 'http://localhost:8080',    // Java Backend
+    aiBaseUrl: 'http://localhost:8000',  // Python AI Engine
+    gercekDuraklar: [], 
 
-    // Sayfa açılır açılmaz backend'e gidip durakları çeker
     initStops: async function() {
         try {
-            // Swagger: GET /api/stops
             const response = await fetch(`${this.baseUrl}/api/stops`);
             if (response.ok) {
                 this.gercekDuraklar = await response.json();
-                console.log("Backend'den Duraklar Başarıyla Çekildi!", this.gercekDuraklar);
             }
         } catch (error) {
-            console.warn("Backend kapalı, yerel (mock) veriler kullanılacak.");
+            console.warn("Backend kapalı, yerel veriler kullanılacak.");
         }
     },
 
-    // SCRIPT.JS'NİN İHTİYAÇ DUYDUĞU FONKSİYON (Arama kutusunu canlandırır)
     getTumDuraklar: function() {
-        // Eğer backend'den veri başarıyla geldiyse gerçek verileri süz
         if (this.gercekDuraklar && this.gercekDuraklar.length > 0) {
             return [...new Set(this.gercekDuraklar.map(d => d.stop_name || d.stopName || d.id))];
         }
-        
-        // Backend'den gelmediyse arayüz çökmesin diye yerel iskeleti kullan
         const set = new Set();
         Object.values(TransitData.hatlar).forEach(hat => hat.duraklar.forEach(d => set.add(d)));
         return [...set].sort((a, b) => a.localeCompare(b, 'tr'));
@@ -55,19 +46,26 @@ const TransitAPI = {
         return sonuc;
     },
 
-    // AI TAHMİN SİSTEMİ BAĞLANTISI (Prediction Controller)
-    getBeklenenSure: async function(stopId) {
+    // YENİ: YAPAY ZEKA MOTORUNDAN CANLI VERİ ÇEKME FONKSİYONU
+    getAITahmin: async function(hatId) {
         try {
-            // Swagger: GET /api/predict/{stopId}
-            const response = await fetch(`${this.baseUrl}/api/predict/${stopId}`);
-            if (response.ok) return await response.json();
+            const now = new Date();
+            const h = now.getHours();
+            const m = now.getMinutes();
+            
+            const response = await fetch(`${this.aiBaseUrl}/predict?line_code=${hatId}&hour=${h}&minute=${m}`);
+            
+            if (response.ok) {
+                const aiData = await response.json();
+                console.log("AI Verisi Geldi:", aiData);
+                return aiData;
+            }
         } catch(e) {
-            console.error("Tahmin alınamadı:", e);
+            console.error("AI Tahmini alınamadı:", e);
         }
         return null;
     },
 
-    // YEREL HAFIZA FONKSİYONLARI
     saveSelection(data) { localStorage.setItem('transitSelection', JSON.stringify(data)); },
     getSelection() {
         try { return JSON.parse(localStorage.getItem('transitSelection')) || {}; }
@@ -75,5 +73,4 @@ const TransitAPI = {
     }
 };
 
-// Sistemi Başlat (Sayfa yüklenirken backend'i yokla)
 TransitAPI.initStops();

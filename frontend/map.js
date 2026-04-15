@@ -1,6 +1,5 @@
 // =========================================
-//  MAP.JS – Rota Paneli + Drag Sheet + Kart Yönetimi
-//  data.js ve TransitAPI ile çalışır
+//  MAP.JS – AI Entegreli Rota Paneli
 // =========================================
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -14,12 +13,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const etaTime = document.getElementById('etaTime');
     const fabBtn = document.getElementById('fabRouteDetail');
 
-    // ── Durumlar ──
     let seciliHatId = 'L01';
-    let kullaniciDurakIndex = 6; // Varsayılan kullanıcı durağı
+    let kullaniciDurakIndex = 6; 
     const selection = TransitAPI.getSelection();
 
-    // Kullanıcı seçimine göre uygun hattı bul
     if (selection.baslangic) {
         const hatlar = TransitAPI.getDurakHatlari(selection.baslangic);
         if (hatlar.length > 0) {
@@ -28,7 +25,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // ── Saat ──
     function updateClock() {
         const now = new Date();
         const el = document.getElementById('statusTime');
@@ -37,15 +33,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateClock();
     setInterval(updateClock, 30000);
 
-    // ── Skeleton ──
     setTimeout(() => {
         skeletonOverlay.classList.add('hidden');
         setTimeout(() => skeletonOverlay.remove(), 500);
     }, 1200);
 
-    // ══════════════════════════════════════
-    //  ROTA PANELİ RENDER
-    // ══════════════════════════════════════
     function renderRoute(hatId) {
         const hat = TransitData.hatlar[hatId];
         if (!hat) return;
@@ -54,14 +46,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const yogunluk = hat.aktifOtobus.yogunluk;
         const renk = hat.renk;
 
-        // Header güncelle
         hatBadge.textContent = hat.id;
         hatBadge.style.background = renk;
         etaTime.innerHTML = `${hat.tahminiSure}<span class="min">Dk</span>`;
-
-        // CSS custom property
         routeTimeline.style.setProperty('--hat-renk', renk);
-
         routeTimeline.innerHTML = '';
 
         hat.duraklar.forEach((durakAdi, i) => {
@@ -69,23 +57,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isBus = i === busIdx;
             const isUser = i === kullaniciDurakIndex;
 
-            // Durak noktası
             const node = document.createElement('div');
             node.className = 'stop-node';
-
             const marker = document.createElement('div');
             marker.className = 'stop-marker';
 
-            if (isBus) {
-                marker.classList.add('bus-loc');
-                marker.innerHTML = '🚌';
-            } else if (isUser) {
-                marker.classList.add('user-loc', `crowd-${yogunluk}`);
-            } else if (isPassed) {
-                marker.classList.add('passed');
-            } else {
-                marker.classList.add('remaining');
-            }
+            if (isBus) { marker.classList.add('bus-loc'); marker.innerHTML = '🚌'; } 
+            else if (isUser) { marker.classList.add('user-loc', `crowd-${yogunluk}`); } 
+            else if (isPassed) { marker.classList.add('passed'); } 
+            else { marker.classList.add('remaining'); }
 
             const label = document.createElement('span');
             label.className = 'stop-label';
@@ -96,7 +76,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             node.appendChild(label);
             routeTimeline.appendChild(node);
 
-            // Segment çizgisi (son durak hariç)
             if (i < hat.duraklar.length - 1) {
                 const seg = document.createElement('div');
                 seg.className = 'route-segment';
@@ -106,9 +85,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // ══════════════════════════════════════
-    //  OTOBÜS KARTLARINI RENDER
-    // ══════════════════════════════════════
     function renderBusCards() {
         busList.innerHTML = '';
         const hatlarArr = Object.entries(TransitData.hatlar);
@@ -137,18 +113,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <span class="bus-stops-count">${hat.duraklar.length} durak</span>
                 </div>
             `;
-
             busList.appendChild(li);
         });
     }
 
-    // İlk render
-    renderRoute(seciliHatId);
-    renderBusCards();
+    // ══════════════════════════════════════
+    //  YAPAY ZEKAYI ÇALIŞTIR VE EKRANI GÜNCELLE
+    // ══════════════════════════════════════
+    async function loadAITahminAndRender(hatId) {
+        etaTime.innerHTML = `<span style="font-size: 20px;">AI...</span>`;
+        
+        const aiData = await TransitAPI.getAITahmin(hatId);
+        
+        if (aiData) {
+            TransitData.hatlar[hatId].tahminiSure = aiData.real_time_delay_min;
+            TransitData.hatlar[hatId].aktifOtobus.yogunluk = aiData.status_color.toLowerCase();
+            
+            const subtitleEl = document.querySelector('.subtitle');
+            if (subtitleEl) {
+                subtitleEl.innerHTML = `🤖 <b>AI:</b> ${aiData.passenger_advice}`;
+                subtitleEl.style.color = '#FFD700'; // Altın sarısı ile dikkat çeksin
+            }
+        }
+        
+        renderRoute(hatId);
+        renderBusCards();
+    }
 
-    // ══════════════════════════════════════
-    //  KART SEÇİMİ (Özellik B: parlama)
-    // ══════════════════════════════════════
+    // İLK YÜKLEMEDE AI ÇAĞIR
+    loadAITahminAndRender(seciliHatId);
+
     busList.addEventListener('click', (e) => {
         const card = e.target.closest('.bus-card');
         if (!card || card.classList.contains('active')) return;
@@ -156,7 +150,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const hatId = card.dataset.hatId;
         seciliHatId = hatId;
 
-        // Kullanıcı durağını bu hatta göre güncelle
         if (selection.baslangic) {
             const hatBilgi = TransitAPI.getDurakHatlari(selection.baslangic);
             const match = hatBilgi.find(h => h.hatId === hatId);
@@ -165,24 +158,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             kullaniciDurakIndex = Math.min(6, TransitData.hatlar[hatId].duraklar.length - 1);
         }
 
-        // Haptic feedback (Özellik C)
         if (navigator.vibrate) navigator.vibrate(30);
 
-        // Animasyonlu seçim
         card.classList.add('selecting');
         setTimeout(() => {
             card.classList.remove('selecting');
-            renderBusCards();
-            renderRoute(seciliHatId);
+            loadAITahminAndRender(seciliHatId);
         }, 350);
 
-        // Seçimi kaydet
         TransitAPI.saveSelection({ ...selection, seciliHat: hatId });
     });
 
-    // ══════════════════════════════════════
-    //  FAB BUTON – Güzergah Detay
-    // ══════════════════════════════════════
     fabBtn.addEventListener('click', () => {
         if (navigator.vibrate) navigator.vibrate(20);
         TransitAPI.saveSelection({ ...TransitAPI.getSelection(), seciliHat: seciliHatId, kullaniciDurakIndex });
@@ -192,9 +178,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(() => { window.location.href = 'route-detail.html'; }, 400);
     });
 
-    // ══════════════════════════════════════
-    //  BOTTOM SHEET – DRAG ONLY (mouse + touch)
-    // ══════════════════════════════════════
+    // ── Bottom Sheet Kodları ── (Aynı kaldı)
     const SHEET_HEIGHT = 540;
     const COLLAPSED_Y = 420;
     let isDragging = false;
@@ -254,12 +238,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 50);
     }
 
-    // Touch events
     dragArea.addEventListener('touchstart', (e) => startDrag(e.touches[0].clientY), { passive: true });
     document.addEventListener('touchmove', (e) => moveDrag(e.touches[0].clientY), { passive: true });
     document.addEventListener('touchend', endDrag);
 
-    // Mouse events (web tarayıcı desteği)
     dragArea.addEventListener('mousedown', (e) => {
         e.preventDefault();
         startDrag(e.clientY);
@@ -267,6 +249,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.addEventListener('mousemove', (e) => moveDrag(e.clientY));
     document.addEventListener('mouseup', endDrag);
 
-    // Overlay'e tıkla → kapat
     mapOverlay.addEventListener('click', closeSheet);
 });
