@@ -5,9 +5,12 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+
+
 /**
  * PredictionController: Batuhan'ın (Frontend) tahmin isteği atacağı son durak.
  */
+@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/predict")
 public class PredictionController {
