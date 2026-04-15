@@ -4,14 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Harita - Transit Core Service</title>
-    <meta name="description" content="Güzergah haritası ve alternatif hatlar">
+    <meta name="description" content="Güzergah haritası ve sıradaki otobüsler">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <main class="app-container page-transition-in" id="appContainer">
 
-        <!-- Skeleton Loading -->
+        <!-- AI Loading Overlay -->
+        <div class="ai-loading-overlay" id="aiLoadingOverlay">
+            <div class="ai-loading-content">
+                <div class="ai-orb">
+                    <div class="ai-orb-ring"></div>
+                    <div class="ai-orb-core">🤖</div>
+                </div>
+                <h2 class="ai-loading-title">Yapay Zeka Analiz Ediyor</h2>
+                <p class="ai-loading-text" id="aiLoadingText">Hat verileri inceleniyor...</p>
+                <div class="ai-loading-bar">
+                    <div class="ai-loading-bar-fill"></div>
+                </div>
+                <div class="ai-loading-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Skeleton Loading (ilk yükleme) -->
         <div class="skeleton-overlay" id="skeletonOverlay">
             <div class="skeleton-spinner"></div>
             <span class="skeleton-text">Güzergah hesaplanıyor...</span>
@@ -19,10 +37,17 @@
         </div>
 
         <div class="status-bar">
+            <button class="back-button-map" id="btnBackToHome" title="Ana Sayfa">←</button>
             <span id="statusTime">09:41</span>
+            <div class="status-spacer"></div>
         </div>
 
-        <!-- Üst Bilgi (dinamik olarak JS doldurur) -->
+        <!-- Fallback Banner (AI çöktüğünde) -->
+        <div class="fallback-banner" id="fallbackBanner" style="display:none;">
+            <span>⚠️ AI servis yanıt veremiyor – Geçmiş ortalamalar kullanılıyor</span>
+        </div>
+
+        <!-- Üst Bilgi -->
         <header class="arrival-header" id="arrivalHeader">
             <div class="hat-badge" id="hatBadge">L01</div>
             <p class="subtitle">Beklenen Süre</p>
@@ -33,7 +58,6 @@
         <section class="map-section" id="mapSection">
             <div class="map-overlay" id="mapOverlay"></div>
 
-            <!-- Rota paneli – JS tarafından doldurulacak -->
             <div class="route-panel" id="routePanel">
                 <div class="route-timeline" id="routeTimeline">
                     <!-- JS render edecek -->
@@ -46,17 +70,17 @@
             </button>
         </section>
 
-        <!-- Bottom Sheet – Drag Only -->
+        <!-- Bottom Sheet – Sıradaki Otobüsler -->
         <section class="bottom-sheet collapsed" id="bottomSheet">
             <div class="drag-area" id="dragArea">
                 <div class="drawer-handle"></div>
                 <div class="drawer-title-row">
-                    <h2 class="drawer-title">Alternatif Hatlar</h2>
+                    <h2 class="drawer-title">Sıradaki Otobüsler</h2>
                     <div class="drawer-title-line"></div>
                 </div>
             </div>
 
-            <!-- Kartlar – JS tarafından doldurulacak -->
+            <!-- Sıradaki Otobüs Kartları – JS render edecek -->
             <ul class="bus-list" id="busList">
                 <!-- JS render edecek -->
             </ul>

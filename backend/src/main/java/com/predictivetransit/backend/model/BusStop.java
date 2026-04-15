@@ -20,4 +20,6 @@ public class BusStop {
     private double stopLat;  // bus_stops.csv -> stop_lat
     
     private double stopLon;  // bus_stops.csv -> stop_lon
+    
+    private String lineId;   // bus_stops.csv -> line_id
 }

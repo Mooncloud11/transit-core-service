@@ -5,10 +5,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
-
-
 /**
- * PredictionController: Batuhan'ın (Frontend) tahmin isteği atacağı son durak.
+ * PredictionController: Frontend'in AI tahmin verilerini Java Backend üzerinden aldığı endpoint.
+ * Frontend → Java Backend (:8080) → Python AI Engine (:8000)
  */
 @CrossOrigin(origins = "*")
 @RestController
@@ -22,14 +21,29 @@ public class PredictionController {
     }
 
     /**
-     * Örnek İstek: GET /api/predict/STP-L01-01?temp=22.5&crowd=40
+     * Hat bazlı gecikme tahmini.
+     * Örnek: GET /api/predict/L01
+     * Frontend bu endpoint'i çağırır, Backend Python AI'dan veriyi alıp döndürür.
      */
-    @GetMapping("/{stopId}")
-    public Map<String, Object> getPrediction(@PathVariable String stopId,
-                                            @RequestParam(defaultValue = "20.0") double temp,
-                                            @RequestParam(defaultValue = "30") int crowd) {
-        
-        // Python ML Köprüsünü kullanarak tahmini getiriyoruz
-        return predictionService.getPredictionFromPython(stopId, temp, crowd);
+    @GetMapping("/{lineCode}")
+    public Map<String, Object> getPrediction(
+            @PathVariable String lineCode,
+            @RequestParam(required = false) Integer hour,
+            @RequestParam(required = false) Integer minute) {
+        return predictionService.getLinePrediction(lineCode, hour, minute);
+    }
+
+    /**
+     * Sıradaki otobüsler tahmini.
+     * Örnek: GET /api/predict/next-buses?lineCode=L01&stopId=STP-L01-05
+     * Bottom sheet'teki "Sıradaki Otobüsler" paneli için kullanılır.
+     */
+    @GetMapping("/next-buses")
+    public Map<String, Object> getNextBuses(
+            @RequestParam String lineCode,
+            @RequestParam String stopId,
+            @RequestParam(required = false) Integer hour,
+            @RequestParam(required = false) Integer minute) {
+        return predictionService.getNextBuses(lineCode, stopId, hour, minute);
     }
 }

@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hatMetaEl = document.getElementById('detailHatMeta');
     const searchInput = document.getElementById('searchStopsInput');
     const btnBack = document.getElementById('btnBack');
+    const btnBackToMap = document.getElementById('btnBackToMap');
     const pullRefresh = document.getElementById('pullRefresh');
     const timelineContainer = document.getElementById('timelineContainer');
 
@@ -150,6 +151,17 @@ document.addEventListener('DOMContentLoaded', () => {
         container.classList.add('page-transition-out');
         setTimeout(() => { window.location.href = 'map.html'; }, 400);
     });
+
+    // Status bar daki geri buton
+    if (btnBackToMap) {
+        btnBackToMap.addEventListener('click', () => {
+            if (navigator.vibrate) navigator.vibrate(20);
+            const container = document.getElementById('appContainer');
+            container.classList.remove('page-transition-in');
+            container.classList.add('page-transition-out');
+            setTimeout(() => { window.location.href = 'map.html'; }, 400);
+        });
+    }
 
     // ══════════════════════════════════════
     //  PULL TO REFRESH (Özellik F)

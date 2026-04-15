@@ -42,6 +42,14 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void loadBusStops(String path) {
+        // Durak İsimlerini frontend ile eşleşecek şekilde tanımlayalım
+        java.util.Map<String, String[]> stopNamesMap = new java.util.HashMap<>();
+        stopNamesMap.put("L01", new String[]{"Merkez Terminal", "Belediye Meydanı", "Cumhuriyet Caddesi", "Atatürk Bulvarı", "Hürriyet Parkı", "Gül Mahallesi", "Çamlık Durağı", "Yeni Mahalle", "Sağlık Ocağı", "Kültür Merkezi", "Stadyum", "Rektörlük", "Mühendislik Fakültesi", "Üniversite Kampüsü"});
+        stopNamesMap.put("L02", new String[]{"Sanayi Sitesi", "Fabrikalar Bölgesi", "İş Merkezi", "Organize Sanayi", "Köprübaşı", "Pazar Yeri", "Adliye", "Emniyet Müdürlüğü", "Devlet Hastanesi", "Acil Servis", "Hastane Ana Giriş"});
+        stopNamesMap.put("L03", new String[]{"Bağlar Mahallesi", "Bağlar Parkı", "Kooperatif", "Otogar", "PTT", "Çarşı Girişi", "Kapalı Çarşı", "Büyük Cami", "Çarşı Merkez"});
+        stopNamesMap.put("L04", new String[]{"Esentepe Terminal", "Esentepe Parkı", "Yıldız Mahallesi", "Güneş Sokak", "Bahçelievler", "Zafer Caddesi", "Kışla", "Spor Salonu", "AVM", "Postane", "Hükümet Konağı", "Meydan"});
+        stopNamesMap.put("L05", new String[]{"Şehirlerarası Terminal", "Terminal Çıkışı", "Yeni Yol", "Kavşak", "Sanayi Kavşağı", "Demir Çelik", "Lojmanlar", "İlkokul", "Ortaokul", "Lise", "Dershane Sokak", "Yurt", "Spor Tesisleri", "Kütüphane", "Kampüs Girişi", "Kampüs Merkez"});
+
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             br.readLine(); // Başlığı atla
             String line;
@@ -50,11 +58,29 @@ public class DataInitializer implements CommandLineRunner {
                 String[] v = line.split(",");
                 if (v.length < 6) continue;
                 try {
+                    String stopId = v[0];
+                    String lineId = v[1]; // L01, vs.
+                    int sequence = Integer.parseInt(v[3]);
+
+                    String stopName = "Bilinmeyen Durak";
+                    if (stopNamesMap.containsKey(lineId)) {
+                        String[] names = stopNamesMap.get(lineId);
+                        if (sequence > 0 && sequence <= names.length) {
+                            stopName = names[sequence - 1];
+                        }
+                    }
+
+                    // Aynı durak ID si zaten eklendiyse atla (örneğin iki hat aynı durağı kullanıyorsa)
+                    if(busStopRepository.findById(stopId).isPresent()) {
+                        continue;
+                    }
+
                     BusStop stop = new BusStop();
-                    stop.setStopId(v[0]);
-                    stop.setStopName(v[2]); 
+                    stop.setStopId(stopId);
+                    stop.setStopName(stopName); 
                     stop.setStopLat(Double.parseDouble(v[4]));
                     stop.setStopLon(Double.parseDouble(v[5]));
+                    stop.setLineId(lineId);
                     busStopRepository.save(stop);
                     count++;
                 } catch (Exception e) {
