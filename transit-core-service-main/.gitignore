@@ -1,0 +1,13 @@
+ai-engine/venv/
+ai-engine/__pycache__/
+*.pyc
+backend/target/
+backend/.mvn/
+backend/mvnw
+backend/mvnw.cmd
+.vscode/
+.fake
+.env
+ai-engine/.env
+data/
+*.mv.db
