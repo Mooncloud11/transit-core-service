@@ -28,7 +28,7 @@ const TransitAPI = {
     //  TEK BAĞLANTI NOKTASI: JAVA BACKEND
     //  Frontend ASLA doğrudan Python AI'a bağlanmaz!
     // Java Backend kapalı olduğu için doğrudan Python FastAPI (AI Engine) portuna bağlandı.
-    baseUrl: 'http://localhost:8001',
+    baseUrl: 'http://localhost:8080',
     gercekDuraklar: [],
     AI_TIMEOUT: 8000, // 8 saniye timeout
 

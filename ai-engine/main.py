@@ -206,7 +206,7 @@ def generate_mock_next_buses(bus_data, sim_hour=12):
 # =====================================================================
 # 6. ROUTING 1 (DELAY PREDICTION)
 # =====================================================================
-@app.get("/api/predict/{line_code}")
+@app.get("/predict")
 def predict_delay(line_code: str, hour: int = None, minute: int = None):
     now = datetime.now()
     hour = hour if hour is not None else now.hour
@@ -253,27 +253,27 @@ def predict_delay(line_code: str, hour: int = None, minute: int = None):
 # =====================================================================
 # 7. ROUTING 2 (NEXT BUSES)
 # =====================================================================
-@app.get("/api/predict/next-buses")
-def get_next_buses(lineCode: str, stopId: str, hour: int = None, minute: int = None):
+@app.get("/next-buses")
+def get_next_buses(line_code: str, stop_id: str, hour: int = None, minute: int = None):
     now = datetime.now()
     hour = hour if hour is not None else now.hour
     minute = minute if minute is not None else now.minute
     
-    cache_key = f"nextbuses_{lineCode}_{stopId}_{hour}"
+    cache_key = f"nextbuses_{line_code}_{stop_id}_{hour}"
     cached = get_cached(cache_key)
     if cached:
         return cached
 
-    bus_data = fetch_next_buses_data(lineCode, stopId, hour)
+    bus_data = fetch_next_buses_data(line_code, stop_id, hour)
     if "error" in bus_data:
         raise HTTPException(status_code=404, detail=bus_data["error"])
 
     prompt = f"""
-    Saat {hour:02d}:{minute:02d} simülasyonu yapan kullanıcıya sıradaki 3 otobüsün Sivas {stopId} durağı varışını tahmin et.
+    Saat {hour:02d}:{minute:02d} simülasyonu yapan kullanıcıya sıradaki 3 otobüsün Sivas {stop_id} durağı varışını tahmin et.
     Durak verisi: {json.dumps(bus_data)}
     ÇIKTI FORMU (JSON ONLY):
     {{
-      "line_id": "{lineCode}", "stop_id": "{stopId}",
+      "line_id": "{line_code}", "stop_id": "{stop_id}",
       "next_buses": [
         {{"bus_order": 1, "estimated_arrival_min": 5.5, "crowding_forecast": "normal", "confidence": 0.88}}
       ],
