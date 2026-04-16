@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: transit_java_backend
+    ports:
+      - "8080:8080"
+    environment:
+      - AI_ENGINE_URL=http://ai-engine:8000
+    depends_on:
+      - ai-engine
+    networks:
+      - transit_net
+
+  ai-engine:
+    build:
+      context: ./ai-engine
+      dockerfile: Dockerfile
+    container_name: transit_python_ai
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./ai-engine/.env
+    networks:
+      - transit_net
+
+  frontend:
+    image: nginx:alpine
+    container_name: transit_frontend
+    ports:
+      - "5500:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+    networks:
+      - transit_net
+
+networks:
+  transit_net:
+    driver: bridge
