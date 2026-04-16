@@ -52,7 +52,13 @@ async function setupAutocomplete(inputId, dropdownId, containerId, mode) {
         }
 
         // İsme göre filtrele (stopName)
+<<<<<<< HEAD
         const filtreli = durakListesi.filter(d => d.stopName.toLowerCase().includes(q));
+=======
+        const filtreli = durakListesi.filter(d => 
+             d.stopName && d.stopName.toLowerCase().includes(q)
+        );
+>>>>>>> 092419cc8e123a718184b29b0936123d5562d9bb
         
         // Tekrar eden isimleri temizle (Sadece benzersiz durak isimleri kalsın)
         const benzersizFiltreli = [];
@@ -232,7 +238,16 @@ document.addEventListener('DOMContentLoaded', () => {
                      const response = await fetch('http://localhost:8080/api/stops'); 
                      if(response.ok) {
                         const duraklar = await response.json();
+<<<<<<< HEAD
                         const bulunanDurak = duraklar.find(d => d.stopName === baslangic && d.lineId === kilitliHatId);
+=======
+                        const bulunanDurak = duraklar.find(d => 
+                             d.stopName && 
+                             baslangic && 
+                             d.stopName.trim().toLowerCase() === baslangic.trim().toLowerCase() && 
+                             d.lineId === kilitliHatId
+                        );
+>>>>>>> 092419cc8e123a718184b29b0936123d5562d9bb
                         if(bulunanDurak) finalStopId = bulunanDurak.stopId;
                      }
                  } catch(e) {}
