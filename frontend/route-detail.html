@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Güzergah Detay - Transit Core</title>
+    <meta name="description" content="Hat güzergah detayları ve durak listesi">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <main class="app-container page-transition-in" id="appContainer">
+
+        <div class="status-bar">
+            <button class="back-button-map" id="btnBackToMap" title="Haritaya Dön">←</button>
+            <span id="statusTime">09:41</span>
+            <div class="status-spacer"></div>
+        </div>
+
+        <!-- Header -->
+        <div class="detail-header" id="detailHeader">
+            <button class="btn-back" id="btnBack">←</button>
+            <div class="detail-hat-info">
+                <span class="detail-hat-name" id="detailHatName">L01 – Merkez - Üniversite</span>
+                <span class="detail-hat-meta" id="detailHatMeta">14 durak</span>
+            </div>
+        </div>
+
+        <!-- Pull to Refresh (Özellik F) -->
+        <div class="pull-refresh-area" id="pullRefresh">
+            ↓ Verileri yenilemek için aşağı çekin
+        </div>
+
+        <!-- Durak Arama (Özellik B) -->
+        <div class="search-stops-box">
+            <input type="text" class="search-stops-input" id="searchStopsInput" placeholder="🔍 Durak ara..." autocomplete="off">
+        </div>
+
+        <!-- Detay Timeline -->
+        <div class="detail-timeline-container" id="timelineContainer">
+            <div class="detail-timeline" id="detailTimeline">
+                <!-- JS render edecek -->
+            </div>
+        </div>
+
+    </main>
+
+    <script src="data.js"></script>
+    <script src="route-detail.js"></script>
+</body>
+</html>
