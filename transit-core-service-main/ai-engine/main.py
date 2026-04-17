@@ -39,7 +39,6 @@ app.add_middleware(
 # =====================================================================
 print("[INFO] Loading data into RAM as Hash-Map (Index)...")
 try:
-    # Python kendi kök dizinindeki (ai-engine) dosyalara odaklanıyor
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     STOPS_DF = pd.read_csv(os.path.join(BASE_DIR, "bus_stops.csv"))
     FLOW_DF = pd.read_csv(os.path.join(BASE_DIR, "passenger_flow.csv"))
@@ -65,7 +64,7 @@ def set_cache(key, data):
 
 
 # =====================================================================
-# 4. TRUE ASYNCHRONOUS AI (AIO CLIENT)
+# 4. TRUE ASYNCHRONOUS AI (AIO CLIENT) WITH BULLETPROOF PARSING
 # =====================================================================
 async def generate_ai_content_with_fallback(prompt: str):
     for index, current_key in enumerate(API_KEYS_LIST):
@@ -77,12 +76,26 @@ async def generate_ai_content_with_fallback(prompt: str):
                 contents=prompt
             )
 
-            response_text = response.text if response.text else "{}"
-            return orjson.loads(response_text.encode('utf-8'))
+            raw_text = response.text if response.text else "{}"
+
+            # --- THE BULLETPROOF MARKDOWN STRIPPER ---
+            clean_text = raw_text.strip()
+            if clean_text.startswith("```json"):
+                clean_text = clean_text[7:]
+            elif clean_text.startswith("```"):
+                clean_text = clean_text[3:]
+
+            if clean_text.endswith("```"):
+                clean_text = clean_text[:-3]
+
+            clean_text = clean_text.strip()
+            # -----------------------------------------
+
+            return orjson.loads(clean_text.encode('utf-8'))
 
         except Exception as api_err:
             if index == len(API_KEYS_LIST) - 1:
-                raise RuntimeError(f"API Keys exhausted: {api_err}")
+                raise RuntimeError(f"API Keys exhausted or parsing failed: {api_err}")
     return {}
 
 
@@ -202,7 +215,7 @@ async def predict_delay(line_code: str, hour: int = None, minute: int = None):
         raise HTTPException(status_code=500, detail=raw_data["system_error"])
 
     expected_output = {
-        "real_time_delay_min": 7,
+        "real_time_delay_min": 7.5,
         "status_color": "YELLOW",
         "passenger_advice": "Short English advice.",
         "route_details": {
