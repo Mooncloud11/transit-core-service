@@ -43,7 +43,7 @@ public class PredictionService {
      * Python AI Engine'in /predict endpoint'ine istek atar.
      * Hata durumunda Frontend'in beklediği formatta fallback döner.
      */
-    @Cacheable(value = "predictions", key = "#lineCode")
+    @Cacheable(value = "predictions", key = "#lineCode + '-' + #reqHour + '-' + #reqMinute")
     @SuppressWarnings("unchecked")
     public Map<String, Object> getLinePrediction(String lineCode, Integer reqHour, Integer reqMinute) {
         LocalTime now = LocalTime.now();
@@ -77,7 +77,7 @@ public class PredictionService {
      * Sıradaki otobüsler tahmini.
      * Python AI Engine'in /next-buses endpoint'ine istek atar.
      */
-    @Cacheable(value = "nextBuses", key = "#lineCode + '-' + #stopId")
+    @Cacheable(value = "nextBuses", key = "#lineCode + '-' + #stopId + '-' + #reqHour + '-' + #reqMinute")
     @SuppressWarnings("unchecked")
     public Map<String, Object> getNextBuses(String lineCode, String stopId, Integer reqHour, Integer reqMinute) {
         LocalTime now = LocalTime.now();
@@ -127,7 +127,7 @@ public class PredictionService {
 
         fallback.put("real_time_delay_min", delay);
         fallback.put("status_color", color);
-        fallback.put("passenger_advice", "AI servisi şu an yanıt veremiyor. Tahmini süreler geçmiş ortalamalara dayanmaktadır.");
+        fallback.put("passenger_advice", "AI service is currently unavailable. Estimated times are based on historical averages.");
         fallback.put("is_fallback", true);
 
         Map<String, String> routeDetails = new HashMap<>();

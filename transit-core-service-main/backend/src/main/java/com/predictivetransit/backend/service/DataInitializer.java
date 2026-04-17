@@ -35,9 +35,13 @@ public class DataInitializer implements CommandLineRunner {
 
         System.out.println(">>> VERİ YÜKLEME İŞLEMİ BAŞLIYOR...");
 
+        // Önceki kalıntı verileri temizleyelim ki veritabanı her çalıştığında şişip patlamasın (Database Bloat onarımı)
+        weatherRepository.deleteAll();
+        passengerFlowRepository.deleteAll();
+
         loadBusStops(basePath + "bus_stops.csv");
         loadWeather(basePath + "weather_observations.csv", formatter);
-        loadPassengerFlow(basePath + "stop_arrivals.csv", formatter); // Veya stop_arrivals.csv
+        loadPassengerFlow(basePath + "passenger_flow.csv", formatter); // Dosya ismi passenger_flow.csv olarak düzeltildi
         
         System.out.println(">>> TÜM VERİLER BAŞARIYLA YÜKLENDİ!");
     }
@@ -122,7 +126,7 @@ public class DataInitializer implements CommandLineRunner {
     private void loadPassengerFlow(String path, DateTimeFormatter formatter) {
     try (BufferedReader br = new BufferedReader(new InputStreamReader(new ClassPathResource(path).getInputStream()))) {
         String header = br.readLine(); 
-        System.out.println(">>> STOP_ARRIVALS BAŞLIK (HEADER): " + header);
+        System.out.println(">>> PASSENGER_FLOW BAŞLIK (HEADER): " + header);
 
         String line;
         int count = 0;
@@ -137,9 +141,8 @@ public class DataInitializer implements CommandLineRunner {
                 flow.setStopId(v[0]); 
                 flow.setTimestamp(LocalDateTime.now()); 
                 
-                // Hata muhtemelen burada: Sütun sayısına veya veri tipine (Double/Integer) takılıyor
-                // Double olarak alıp int'e (Integer) çevirmeyi deniyoruz
-                double passCount = Double.parseDouble(v[v.length - 1].trim());
+                // Doğru data dosyasına göre: Yolcu bekleme sayısı "avg_passengers_waiting" sütununda ve Index: 8 
+                double passCount = Double.parseDouble(v[8].trim());
                 flow.setPassengerCount((int) passCount); 
                 
                 passengerFlowRepository.save(flow);
