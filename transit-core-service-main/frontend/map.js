@@ -1,6 +1,6 @@
 // =========================================
-//  MAP.JS – v2: AI Loading Overlay + Sıradaki Otobüsler
-//  Tüm veriler Java Backend (:8080) üzerinden gelir.
+//  MAP.JS – v2: AI Loading Overlay + Next Buses
+//  All data comes through Java Backend (:8080).
 // =========================================
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -39,17 +39,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         kullaniciStopId = TransitAPI.getStopId(selection.baslangic, seciliHatId);
     }
 
-    // ── Simülasyon Kontrolü ──
+    // ── Route Info Bar (Start → Destination) ──
+    const routeInfoBar = document.getElementById('routeInfoBar');
+    const routeStartName = document.getElementById('routeStartName');
+    const routeEndName = document.getElementById('routeEndName');
+    if (selection.baslangic || selection.varis) {
+        if (routeInfoBar) routeInfoBar.style.display = 'flex';
+        if (routeStartName) routeStartName.textContent = selection.baslangic || '—';
+        if (routeEndName) routeEndName.textContent = selection.varis || '—';
+    }
+
+    // ── Simulation Control ──
     const isSimMode = selection.simHour !== undefined && selection.simHour !== null;
     if (isSimMode) {
-        // Ekrana Simülasyon Banner Ekle
         const simBanner = document.createElement('div');
-        simBanner.style.cssText = 'position:absolute; top:42px; left:50%; transform:translateX(-50%); background:rgba(255,149,0,0.9); color:#fff; padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700; z-index:100; white-space:nowrap; box-shadow:0 4px 12px rgba(0,0,0,0.3); backdrop-filter:blur(4px);';
-        simBanner.innerHTML = `Simülasyon Modu: ${selection.simHour.toString().padStart(2,'0')}:${selection.simMinute.toString().padStart(2,'0')}`;
+        simBanner.style.cssText = 'position:absolute; top:42px; left:50%; transform:translateX(-50%); background:rgba(255,255,255,0.1); backdrop-filter:blur(12px); color:rgba(255,255,255,0.9); padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700; z-index:100; white-space:nowrap; box-shadow:0 4px 12px rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1);';
+        simBanner.innerHTML = `Simulation Mode: ${selection.simHour.toString().padStart(2,'0')}:${selection.simMinute.toString().padStart(2,'0')}`;
         document.getElementById('appContainer').appendChild(simBanner);
     }
 
-    // ── Saat ──
+    // ── Clock ──
     function updateClock() {
         const now = new Date();
         const el = document.getElementById('statusTime');
@@ -60,7 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateClock();
     setInterval(updateClock, 30000);
 
-    // ── Geri Butonu → Index ──
+    // ── Back Button → Index ──
     btnBack.addEventListener('click', () => {
         if (navigator.vibrate) navigator.vibrate(20);
         const container = document.getElementById('appContainer');
@@ -69,21 +78,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         setTimeout(() => { window.location.href = 'index.html'; }, 400);
     });
 
-    // ── Skeleton kaldırma ──
+    // ── Remove skeleton ──
     setTimeout(() => {
         skeletonOverlay.classList.add('hidden');
         setTimeout(() => skeletonOverlay.remove(), 500);
     }, 1200);
 
     // ══════════════════════════════════════
-    //  AI LOADING OVERLAY (Bekleme Ekranı)
+    //  AI LOADING OVERLAY
     // ══════════════════════════════════════
     const loadingMessages = [
-        "Hat verileri inceleniyor...",
-        "Hava durumu analiz ediliyor...",
-        "Trafik yoğunluğu hesaplanıyor...",
-        "Yapay zeka modeli çalışıyor...",
-        "Gecikme tahmini oluşturuluyor..."
+        "Inspecting line data...",
+        "Analyzing weather conditions...",
+        "Calculating traffic density...",
+        "Running AI model...",
+        "Generating delay prediction..."
     ];
 
     function showAILoading() {
@@ -107,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ══════════════════════════════════════
-    //  ROTA RENDER
+    //  ROUTE RENDER
     // ══════════════════════════════════════
     function renderRoute(hatId) {
         const hat = TransitData.hatlar[hatId];
@@ -120,9 +129,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         hatBadge.textContent = hat.id;
         hatBadge.style.background = renk;
         const sure = hat.tahminiSure ?? '—';
-        etaTime.innerHTML = `${sure}<span class="min">Dk</span>`;
+        etaTime.innerHTML = `${sure}<span class="min">min</span>`;
         routeTimeline.style.setProperty('--hat-renk', renk);
         routeTimeline.innerHTML = '';
+
+        let animDelay = 0;
 
         hat.duraklar.forEach((durakAdi, i) => {
             const isPassed = i <= busIdx;
@@ -130,7 +141,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isUser = i === kullaniciDurakIndex;
 
             const node = document.createElement('div');
-            node.className = 'stop-node';
+            node.className = 'stop-node animated';
+            node.style.animationDelay = `${animDelay}ms`;
+            animDelay += 60;
+
             const marker = document.createElement('div');
             marker.className = 'stop-marker';
 
@@ -146,19 +160,42 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             node.appendChild(marker);
             node.appendChild(label);
+
+            // ── Tooltip Popup (on bus stop) ──
+            if (isBus) {
+                node.style.position = 'relative';
+                const nextDurak = hat.duraklar[i + 1] || 'Son Durak';
+                const tooltip = document.createElement('div');
+                tooltip.className = 'stop-tooltip';
+                tooltip.innerHTML = `
+                    <div class="stop-tooltip-row">
+                        <span class="stop-tooltip-label">Anlık Durak:</span>
+                        <span class="stop-tooltip-value">${durakAdi.toUpperCase()}</span>
+                    </div>
+                    <div class="stop-tooltip-row">
+                        <span class="stop-tooltip-label">Sonraki Durak:</span>
+                        <span class="stop-tooltip-value">${nextDurak}</span>
+                    </div>
+                `;
+                tooltip.style.animationDelay = `${animDelay + 200}ms`;
+                node.appendChild(tooltip);
+            }
+
             routeTimeline.appendChild(node);
 
             if (i < hat.duraklar.length - 1) {
                 const seg = document.createElement('div');
-                seg.className = 'route-segment';
+                seg.className = 'route-segment animated';
                 seg.classList.add(i < busIdx ? 'passed' : 'remaining');
+                seg.style.animationDelay = `${animDelay}ms`;
+                animDelay += 30;
                 routeTimeline.appendChild(seg);
             }
         });
     }
 
     // ══════════════════════════════════════
-    //  SIRADAKİ OTOBÜSLER RENDER
+    //  NEXT BUSES RENDER
     // ══════════════════════════════════════
     function renderNextBuses(nextBusData) {
         busList.innerHTML = '';
@@ -166,7 +203,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!hat) return;
 
         if (nextBusData && nextBusData.next_buses) {
-            // AI/Backend'den gelen sıradaki otobüs verileri
             const buses = nextBusData.next_buses;
             const isFallback = nextBusData.is_fallback;
 
@@ -175,7 +211,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 li.className = 'bus-card next-bus-card';
                 li.style.setProperty('--hat-renk', hat.renk);
 
-                const crowdText = { busy: 'Kalabalık', normal: 'Uygun', quiet: 'Boş' };
+                const crowdText = { busy: 'Crowded', normal: 'Available', quiet: 'Empty' };
                 const crowdColor = { busy: '#FF9500', normal: '#34C759', quiet: '#4A90D9' };
                 const crowdEmoji = { busy: '👥', normal: '🧑', quiet: '💺' };
                 const crowd = bus.crowding_forecast || 'normal';
@@ -184,73 +220,71 @@ document.addEventListener('DOMContentLoaded', async () => {
                 li.innerHTML = `
                     <div class="hat-color-band" style="background:${hat.renk}"></div>
                     <div class="next-bus-order" style="background:${hat.renk}20;color:${hat.renk}">
-                        ${bus.bus_order}. Otobüs
+                        Bus #${bus.bus_order}
                     </div>
                     <div class="bus-details">
                         <span class="bus-route">${hat.ad}</span>
                         <span class="bus-crowd" style="color:${crowdColor[crowd]}">${crowdEmoji[crowd]} ${crowdText[crowd]}</span>
                     </div>
                     <div class="bus-status">
-                        <span class="next-bus-eta">${Math.round(bus.estimated_arrival_min)}<small>dk</small></span>
-                        <span class="next-bus-confidence" title="Tahmin güvenilirliği">${isFallback ? '📊' : '🤖'} %${confidence}</span>
+                        <span class="next-bus-eta">${Math.round(bus.estimated_arrival_min)}<small>min</small></span>
+                        <span class="next-bus-confidence" title="Prediction confidence">${isFallback ? '📊' : '🤖'} ${confidence}%</span>
                     </div>
                 `;
                 busList.appendChild(li);
             });
 
-            // Hava ve trafik bilgisi footer
+            // Weather and traffic info footer
             if (nextBusData.weather || nextBusData.traffic_level) {
                 const footer = document.createElement('li');
                 footer.className = 'next-bus-footer';
                 const weatherEmoji = { rain: '🌧️', snow: '❄️', fog: '🌫️', wind: '💨', cloudy: '☁️', clear: '☀️' };
                 const trafficEmoji = { heavy: '🔴', moderate: '🟡', normal: '🟢', light: '🟢' };
                 footer.innerHTML = `
-                    <span>${weatherEmoji[nextBusData.weather] || '🌤️'} ${nextBusData.weather || 'Bilinmiyor'}</span>
-                    <span>${trafficEmoji[nextBusData.traffic_level] || '⚪'} Trafik: ${nextBusData.traffic_level || 'Bilinmiyor'}</span>
+                    <span>${weatherEmoji[nextBusData.weather] || '🌤️'} ${nextBusData.weather || 'Unknown'}</span>
+                    <span>${trafficEmoji[nextBusData.traffic_level] || '⚪'} Traffic: ${nextBusData.traffic_level || 'Unknown'}</span>
                 `;
                 busList.appendChild(footer);
             }
         } else {
-            // Backend/AI hiç veri dönmedi
             busList.innerHTML = `
                 <li class="next-bus-empty">
                     <span class="empty-icon">🚌</span>
-                    <span class="empty-text">Sıradaki otobüs verisi yüklenemedi</span>
-                    <span class="empty-sub">Veriler güncellendiğinde tekrar deneyin</span>
+                    <span class="empty-text">Could not load next bus data</span>
+                    <span class="empty-sub">Try again when data is updated</span>
                 </li>
             `;
         }
     }
 
     // ══════════════════════════════════════
-    //  AI TAHMİN + SIRADAKİ OTOBÜS YÜKLE
+    //  AI PREDICTION + NEXT BUS LOAD
     // ══════════════════════════════════════
     async function loadAIDataAndRender(hatId) {
         showAILoading();
 
-        // Paralel olarak iki isteği at
+        // Fire both requests in parallel
         const [aiData, nextBusData] = await Promise.all([
             TransitAPI.getAITahmin(hatId, selection.simHour, selection.simMinute),
             kullaniciStopId ? TransitAPI.getNextBuses(hatId, kullaniciStopId, selection.simHour, selection.simMinute) : Promise.resolve(null)
         ]);
 
-        // AI tahmin verilerini uygula
+        // Apply AI prediction data
         if (aiData && aiData.real_time_delay_min !== undefined) {
             TransitData.hatlar[hatId].tahminiSure = aiData.real_time_delay_min;
 
-            // status_color → yogunluk dönüşümü
             const colorMap = { 'red': 'red', 'yellow': 'yellow', 'green': 'green' };
             const statusColor = (aiData.status_color || '').toLowerCase();
             TransitData.hatlar[hatId].aktifOtobus.yogunluk = colorMap[statusColor] || 'yellow';
 
-            // AI tavsiye mesajı
+            // AI advice message
             const subtitleEl = document.querySelector('.subtitle');
             if (subtitleEl && aiData.passenger_advice) {
                 subtitleEl.innerHTML = `🤖 <b>AI:</b> ${aiData.passenger_advice}`;
                 subtitleEl.style.color = '#FFD700';
             }
 
-            // Fallback durumunu göster
+            // Show fallback status
             if (aiData.is_fallback) {
                 fallbackBanner.style.display = 'flex';
             } else {
@@ -263,7 +297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderNextBuses(nextBusData);
     }
 
-    // ── İlk yükleme ──
+    // ── Initial load ──
     loadAIDataAndRender(seciliHatId);
 
     // ── FAB → Route Detail ──
@@ -316,7 +350,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         bottomSheet.style.transform = `translateY(${newY}px)`;
 
         const progress = 1 - (newY / COLLAPSED_Y);
-        mapOverlay.style.background = `rgba(0,0,0,${0.35 * progress})`;
+        mapOverlay.style.background = `rgba(0,0,0,${0.5 * progress})`;
         mapOverlay.style.pointerEvents = progress > 0.1 ? 'auto' : 'none';
     }
 

@@ -1,6 +1,6 @@
 // =========================================
-//  ROUTE-DETAIL.JS – Güzergah Detay Sayfası
-//  Hat duraklarını timeline olarak gösterir
+//  ROUTE-DETAIL.JS – Route Detail Page
+//  Shows line stops as a frosted glass timeline
 // =========================================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,10 +11,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('searchStopsInput');
     const btnBack = document.getElementById('btnBack');
     const btnBackToMap = document.getElementById('btnBackToMap');
-    const pullRefresh = document.getElementById('pullRefresh');
+    const searchToggleBtn = document.getElementById('searchToggleBtn');
+    const searchBarContainer = document.getElementById('searchBarContainer');
     const timelineContainer = document.getElementById('timelineContainer');
 
-    // ── Saat ──
+    // ── Clock ──
     function updateClock() {
         const now = new Date();
         const el = document.getElementById('statusTime');
@@ -23,33 +24,45 @@ document.addEventListener('DOMContentLoaded', () => {
     updateClock();
     setInterval(updateClock, 30000);
 
-    // ── Seçimi oku ──
-    const selection = TransitAPI.getSelection();
+    // ── Read selection ──
+    const selection = typeof TransitAPI !== 'undefined' ? TransitAPI.getSelection() : {};
     const hatId = selection.seciliHat || 'L01';
-    const hat = TransitData.hatlar[hatId];
-    const kullaniciDurakIdx = selection.kullaniciDurakIndex ?? 6;
+    const hat = (typeof TransitData !== 'undefined' && TransitData.hatlar) ? TransitData.hatlar[hatId] : null;
+    const kullaniciDurakIdx = selection.kullaniciDurakIndex !== undefined ? selection.kullaniciDurakIndex : 6;
 
     if (!hat) {
-        timeline.innerHTML = '<p style="text-align:center;color:#888;padding:40px;">Hat bulunamadı</p>';
+        if(timeline) timeline.innerHTML = '<p style="text-align:center;color:rgba(255,255,255,0.4);padding:40px;">Line not found</p>';
         return;
     }
 
-    const busIdx = hat.aktifOtobus.mevcutDurakIndex;
-    const yogunluk = hat.aktifOtobus.yogunluk;
-    const renk = hat.renk;
+    const busIdx = hat.aktifOtobus ? hat.aktifOtobus.mevcutDurakIndex : 0;
+    const yogunluk = hat.aktifOtobus ? hat.aktifOtobus.yogunluk : 'green';
+    const renk = hat.renk || '#FFFFFF';
 
     // ── Header ──
-    hatNameEl.textContent = `${hat.id} – ${hat.ad}`;
-    hatMetaEl.textContent = `${hat.duraklar.length} durak • Tahmini ${hat.tahminiSure} dk`;
-    hatNameEl.style.color = 'white';
+    if (hatNameEl) hatNameEl.textContent = `${hat.id} ${hat.ad}`;
+    if (hatMetaEl) hatMetaEl.textContent = `${hat.duraklar.length} stops • Est. ${hat.tahminiSure || 0} min`;
+    if (timeline) timeline.style.setProperty('--hat-renk', renk);
 
-    // CSS custom property
-    timeline.style.setProperty('--hat-renk', renk);
+    // ── Toggle Search ──
+    if (searchToggleBtn && searchBarContainer) {
+        searchToggleBtn.addEventListener('click', () => {
+            if (searchBarContainer.style.display === 'none') {
+                searchBarContainer.style.display = 'block';
+                if(searchInput) searchInput.focus();
+            } else {
+                searchBarContainer.style.display = 'none';
+                if(searchInput) searchInput.value = '';
+                renderTimeline();
+            }
+        });
+    }
 
     // ══════════════════════════════════════
-    //  TIMELINE RENDER
+    //  TIMELINE RENDER (Frosted Glass Layout)
     // ══════════════════════════════════════
     function renderTimeline(filter = '') {
+        if(!timeline) return;
         timeline.innerHTML = '';
 
         hat.duraklar.forEach((durakAdi, i) => {
@@ -58,16 +71,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const isUser = i === kullaniciDurakIdx;
             const isLast = i === hat.duraklar.length - 1;
 
-            // Filtreleme
+            // Filter
             const matchesFilter = !filter || durakAdi.toLowerCase().includes(filter.toLowerCase());
 
             const row = document.createElement('div');
             row.className = 'detail-stop-row';
             if (!matchesFilter) row.classList.add('hidden-by-search');
 
-            // Sol visual (dot + line)
-            const visual = document.createElement('div');
-            visual.className = 'detail-stop-visual';
+            // --- Left: Stop Name ---
+            const leftDiv = document.createElement('div');
+            leftDiv.className = 'detail-stop-name-left';
+            if (isBus || isUser) leftDiv.classList.add('highlight');
+            leftDiv.innerHTML = durakAdi.replace(' ', '<br>'); // Mockup has line breaks for long words
+            row.appendChild(leftDiv);
+
+            // --- Center: Visuals (Dot & Line) ---
+            const centerDiv = document.createElement('div');
+            centerDiv.className = 'detail-stop-center';
 
             const dot = document.createElement('div');
             dot.className = 'detail-stop-dot';
@@ -80,54 +100,45 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (isPassed) {
                 dot.classList.add('passed');
             }
+            centerDiv.appendChild(dot);
 
-            visual.appendChild(dot);
-
-            // Çizgi (son durak hariç)
+            // Line
             if (!isLast) {
                 const line = document.createElement('div');
                 line.className = 'detail-stop-line';
                 if (isPassed && !isBus) line.classList.add('passed');
-                visual.appendChild(line);
+                centerDiv.appendChild(line);
+            }
+            row.appendChild(centerDiv);
+
+            // --- Right: Info (Time / Tags) ---
+            const rightDiv = document.createElement('div');
+            rightDiv.className = 'detail-stop-info-right';
+
+            // Fake time calculation based on index difference
+            let timeText = '';
+            if(isBus) timeText = '0 min';
+            else if (i > busIdx) {
+                timeText = `${(i - busIdx) * 7} min`;
+            } else {
+                 timeText = '✓ Passed';
             }
 
-            // Sağ bilgi
-            const info = document.createElement('div');
-            info.className = 'detail-stop-info';
-
-            const name = document.createElement('span');
-            name.className = 'detail-stop-name';
-            name.textContent = durakAdi;
-
-            if (isBus || isUser) name.classList.add('highlight');
-
-            info.appendChild(name);
-
-            // Etiketler
-            if (isBus) {
-                const tag = document.createElement('span');
-                tag.className = 'detail-stop-tag bus-tag';
-                tag.textContent = '🚌 Otobüs burada';
-                info.appendChild(tag);
-            }
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = timeText;
+            rightDiv.appendChild(timeSpan);
 
             if (isUser) {
                 const tag = document.createElement('span');
                 tag.className = `detail-stop-tag user-tag ${yogunluk}`;
-                const crowdText = { red: 'Çok Yoğun', yellow: 'Orta', green: 'Uygun' };
-                tag.textContent = `📍 Sizin durağınız • ${crowdText[yogunluk]}`;
-                info.appendChild(tag);
+                const crowdText = { red: 'Crowded', yellow: 'Moderate', green: 'Empty' };
+                tag.textContent = crowdText[yogunluk];
+                rightDiv.appendChild(tag);
             }
+            
+            row.appendChild(rightDiv);
 
-            if (isPassed && !isBus && !isUser) {
-                const passedText = document.createElement('span');
-                passedText.style.cssText = 'font-size:11px;color:#999;';
-                passedText.textContent = '✓ Geçildi';
-                info.appendChild(passedText);
-            }
-
-            row.appendChild(visual);
-            row.appendChild(info);
+            // Append row to timeline
             timeline.appendChild(row);
         });
     }
@@ -135,24 +146,27 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTimeline();
 
     // ══════════════════════════════════════
-    //  DURAK ARAMA (Özellik B)
+    //  STOP SEARCH
     // ══════════════════════════════════════
-    searchInput.addEventListener('input', function() {
-        renderTimeline(this.value);
-    });
+    if(searchInput) {
+        searchInput.addEventListener('input', function() {
+            renderTimeline(this.value);
+        });
+    }
 
     // ══════════════════════════════════════
-    //  GERİ BUTONU
+    //  BACK BUTTONS
     // ══════════════════════════════════════
-    btnBack.addEventListener('click', () => {
-        if (navigator.vibrate) navigator.vibrate(20);
-        const container = document.getElementById('appContainer');
-        container.classList.remove('page-transition-in');
-        container.classList.add('page-transition-out');
-        setTimeout(() => { window.location.href = 'map.html'; }, 400);
-    });
+    if(btnBack) {
+        btnBack.addEventListener('click', () => {
+            if (navigator.vibrate) navigator.vibrate(20);
+            const container = document.getElementById('appContainer');
+            container.classList.remove('page-transition-in');
+            container.classList.add('page-transition-out');
+            setTimeout(() => { window.location.href = 'map.html'; }, 400);
+        });
+    }
 
-    // Status bar daki geri buton
     if (btnBackToMap) {
         btnBackToMap.addEventListener('click', () => {
             if (navigator.vibrate) navigator.vibrate(20);
@@ -162,42 +176,4 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => { window.location.href = 'map.html'; }, 400);
         });
     }
-
-    // ══════════════════════════════════════
-    //  PULL TO REFRESH (Özellik F)
-    // ══════════════════════════════════════
-    let pullStartY = 0;
-    let isPulling = false;
-
-    timelineContainer.addEventListener('touchstart', (e) => {
-        if (timelineContainer.scrollTop === 0) {
-            pullStartY = e.touches[0].clientY;
-            isPulling = true;
-        }
-    }, { passive: true });
-
-    timelineContainer.addEventListener('touchmove', (e) => {
-        if (!isPulling) return;
-        const delta = e.touches[0].clientY - pullStartY;
-        if (delta > 0 && delta < 100) {
-            pullRefresh.style.opacity = Math.min(1, delta / 60);
-            pullRefresh.style.transform = `translateY(${delta * 0.3}px)`;
-        }
-    }, { passive: true });
-
-    timelineContainer.addEventListener('touchend', () => {
-        if (!isPulling) return;
-        isPulling = false;
-        pullRefresh.style.opacity = '';
-        pullRefresh.style.transform = '';
-
-        // Backend bağlandığında burada veri yenileme çağrısı yapılacak
-        // TransitAPI.getOtobusKonum(hatId).then(data => { ... });
-
-        if (navigator.vibrate) navigator.vibrate(30);
-        pullRefresh.textContent = '✓ Veriler güncel';
-        setTimeout(() => {
-            pullRefresh.textContent = '↓ Verileri yenilemek için aşağı çekin';
-        }, 2000);
-    });
 });
