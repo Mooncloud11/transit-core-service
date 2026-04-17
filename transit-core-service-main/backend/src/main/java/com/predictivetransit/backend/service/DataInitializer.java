@@ -36,6 +36,7 @@ public class DataInitializer implements CommandLineRunner {
         System.out.println(">>> VERİ YÜKLEME İŞLEMİ BAŞLIYOR...");
 
         // Önceki kalıntı verileri temizleyelim ki veritabanı her çalıştığında şişip patlamasın (Database Bloat onarımı)
+        busStopRepository.deleteAll();
         weatherRepository.deleteAll();
         passengerFlowRepository.deleteAll();
 

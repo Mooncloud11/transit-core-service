@@ -121,8 +121,8 @@ public class PredictionService {
         
         double delay = avgDelays.getOrDefault(lineCode, 5.0);
         String color;
-        if (delay > 6) color = "YELLOW";
-        else if (delay > 8) color = "RED";
+        if (delay > 8) color = "RED";
+        else if (delay > 6) color = "YELLOW";
         else color = "GREEN";
 
         fallback.put("real_time_delay_min", delay);
