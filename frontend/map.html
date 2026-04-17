@@ -1,15 +1,21 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Harita - Transit Core Service</title>
-    <meta name="description" content="Güzergah haritası ve sıradaki otobüsler">
+    <title>Map - Transit Core Service</title>
+    <meta name="description" content="Route map and next bus arrivals">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <main class="app-container page-transition-in" id="appContainer">
+
+        <!-- City Streets Map Background -->
+        <div class="map-bg">
+            <img src="assets/map-streets-bg.png" alt="" class="map-bg-img">
+            <div class="map-bg-overlay"></div>
+        </div>
 
         <!-- AI Loading Overlay -->
         <div class="ai-loading-overlay" id="aiLoadingOverlay">
@@ -18,8 +24,8 @@
                     <div class="ai-orb-ring"></div>
                     <div class="ai-orb-core">🤖</div>
                 </div>
-                <h2 class="ai-loading-title">Yapay Zeka Analiz Ediyor</h2>
-                <p class="ai-loading-text" id="aiLoadingText">Hat verileri inceleniyor...</p>
+                <h2 class="ai-loading-title">AI is Analyzing</h2>
+                <p class="ai-loading-text" id="aiLoadingText">Inspecting line data...</p>
                 <div class="ai-loading-bar">
                     <div class="ai-loading-bar-fill"></div>
                 </div>
@@ -29,60 +35,73 @@
             </div>
         </div>
 
-        <!-- Skeleton Loading (ilk yükleme) -->
+        <!-- Skeleton Loading -->
         <div class="skeleton-overlay" id="skeletonOverlay">
             <div class="skeleton-spinner"></div>
-            <span class="skeleton-text">Güzergah hesaplanıyor...</span>
+            <span class="skeleton-text">Calculating route...</span>
             <div class="skeleton-bar"></div>
         </div>
 
         <div class="status-bar">
-            <button class="back-button-map" id="btnBackToHome" title="Ana Sayfa">←</button>
+            <button class="back-button-map" id="btnBackToHome" title="Home">←</button>
             <span id="statusTime">09:41</span>
             <div class="status-spacer"></div>
         </div>
 
-        <!-- Fallback Banner (AI çöktüğünde) -->
+        <!-- Fallback Banner (when AI is down) -->
         <div class="fallback-banner" id="fallbackBanner" style="display:none;">
-            <span>⚠️ AI servis yanıt veremiyor – Geçmiş ortalamalar kullanılıyor</span>
+            <span>⚠️ AI service not responding – Using historical averages</span>
         </div>
 
-        <!-- Üst Bilgi -->
+        <!-- Route Info Bar (Start → Destination) -->
+        <div class="route-info-bar" id="routeInfoBar" style="display:none;">
+            <div class="route-endpoint">
+                <span class="route-endpoint-label">Başlangıç</span>
+                <span class="route-endpoint-value" id="routeStartName">—</span>
+            </div>
+            <span class="route-arrow">→</span>
+            <div class="route-endpoint">
+                <span class="route-endpoint-label">Varış</span>
+                <span class="route-endpoint-value" id="routeEndName">—</span>
+            </div>
+        </div>
+
+        <!-- Header Info -->
         <header class="arrival-header" id="arrivalHeader">
             <div class="hat-badge" id="hatBadge">L01</div>
-            <p class="subtitle">Beklenen Süre</p>
-            <h1 class="time" id="etaTime">3<span class="min">Dk</span></h1>
+            <p class="subtitle">Estimated Arrival</p>
+            <h1 class="time" id="etaTime">3<span class="min">min</span></h1>
         </header>
 
-        <!-- Harita / Rota Paneli -->
+        <!-- Map / Route Panel -->
         <section class="map-section" id="mapSection">
             <div class="map-overlay" id="mapOverlay"></div>
 
             <div class="route-panel" id="routePanel">
                 <div class="route-timeline" id="routeTimeline">
-                    <!-- JS render edecek -->
+                    <!-- JS will render -->
                 </div>
             </div>
 
-            <!-- FAB – Güzergah Detay Butonu -->
-            <button class="fab-route-detail" id="fabRouteDetail" title="Güzergah Detayı">
+            <!-- FAB – Route Detail Button -->
+            <button class="fab-route-detail" id="fabRouteDetail" title="Route Details">
                 <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
             </button>
         </section>
 
-        <!-- Bottom Sheet – Sıradaki Otobüsler -->
+        <!-- Bottom Sheet – Next Buses -->
         <section class="bottom-sheet collapsed" id="bottomSheet">
             <div class="drag-area" id="dragArea">
                 <div class="drawer-handle"></div>
                 <div class="drawer-title-row">
-                    <h2 class="drawer-title">Sıradaki Otobüsler</h2>
+                    <h2 class="drawer-title">Next Buses</h2>
                     <div class="drawer-title-line"></div>
                 </div>
             </div>
 
-            <!-- Sıradaki Otobüs Kartları – JS render edecek -->
+            <!-- Next Bus Cards – JS will render -->
             <ul class="bus-list" id="busList">
-                <!-- JS render edecek -->
+                <!-- JS will render -->
             </ul>
         </section>
 

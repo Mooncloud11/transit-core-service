@@ -1,47 +1,53 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Güzergah Detay - Transit Core</title>
-    <meta name="description" content="Hat güzergah detayları ve durak listesi">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Route Detail - Transit Core</title>
+    <meta name="description" content="Line route details with frosted glass timeline">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
     <main class="app-container page-transition-in" id="appContainer">
 
+        <!-- City Night Background -->
+        <div class="detail-bg">
+            <img src="assets/city-night-bg.png" alt="" class="detail-bg-img">
+            <div class="detail-bg-overlay"></div>
+        </div>
+
+        <!-- Status Bar -->
         <div class="status-bar">
-            <button class="back-button-map" id="btnBackToMap" title="Haritaya Dön">←</button>
-            <span id="statusTime">09:41</span>
+            <button class="back-button-map" id="btnBackToMap" title="Back">←</button>
+            <span id="statusTime">10:09</span>
             <div class="status-spacer"></div>
         </div>
 
-        <!-- Header -->
-        <div class="detail-header" id="detailHeader">
-            <button class="btn-back" id="btnBack">←</button>
-            <div class="detail-hat-info">
-                <span class="detail-hat-name" id="detailHatName">L01 – Merkez - Üniversite</span>
-                <span class="detail-hat-meta" id="detailHatMeta">14 durak</span>
-            </div>
+        <!-- Header Bar -->
+        <div class="detail-top-bar">
+            <button class="detail-back-btn" id="btnBack">‹</button>
+            <span class="detail-top-title" id="detailHatName">L01 Merkez - Üniversite</span>
+            <button class="detail-search-btn" id="searchToggleBtn">🔍</button>
         </div>
 
-        <!-- Pull to Refresh (Özellik F) -->
-        <div class="pull-refresh-area" id="pullRefresh">
-            ↓ Verileri yenilemek için aşağı çekin
+        <!-- Search (collapsible) -->
+        <div class="detail-search-bar" id="searchBarContainer" style="display:none;">
+            <input type="text" class="detail-search-input" id="searchStopsInput" placeholder="Search stops..." autocomplete="off">
         </div>
 
-        <!-- Durak Arama (Özellik B) -->
-        <div class="search-stops-box">
-            <input type="text" class="search-stops-input" id="searchStopsInput" placeholder="🔍 Durak ara..." autocomplete="off">
-        </div>
+        <!-- Hidden meta for JS -->
+        <span id="detailHatMeta" style="display:none;"></span>
 
-        <!-- Detay Timeline -->
-        <div class="detail-timeline-container" id="timelineContainer">
+        <!-- Frosted Glass Timeline Card -->
+        <div class="glass-timeline-card" id="timelineContainer">
             <div class="detail-timeline" id="detailTimeline">
-                <!-- JS render edecek -->
+                <!-- JS renders stops here -->
             </div>
         </div>
+
+        <!-- Home Indicator -->
+        <div class="home-indicator"></div>
 
     </main>
 
