@@ -87,9 +87,20 @@ public class PredictionResponseNormalizer {
 
                 Map<String, Object> bus = new HashMap<>();
                 bus.put("bus_order", safeInt(rawBus.get("bus_order"), fallbackOrder));
-                bus.put("estimated_arrival_min", safeDouble(rawBus.get("estimated_arrival_min"), fallbackOrder * 10.0));
-                bus.put("crowding_forecast", normalizeCrowdingForecast(rawBus.get("crowding_forecast")));
-                bus.put("confidence", normalizeConfidence(rawBus.get("confidence")));
+                bus.put("planned_arrival_min", safeDouble(rawBus.get("planned_arrival_min"), fallbackOrder * 15.0));
+                bus.put("estimated_arrival_min", safeDouble(rawBus.get("estimated_arrival_min"), fallbackOrder * 15.0));
+
+                if (fallbackOrder == 1) {
+                    bus.put("current_bus_location_index", safeInt(rawBus.get("current_bus_location_index"), 0));
+                }
+
+                if (rawBus.containsKey("crowding_forecast")) {
+                    bus.put("crowding_forecast", normalizeCrowdingForecast(rawBus.get("crowding_forecast")));
+                    bus.put("confidence", normalizeConfidence(rawBus.get("confidence")));
+                } else {
+                    bus.put("crowding_forecast", "normal");
+                    bus.put("confidence", 0.5);
+                }
 
                 normalizedBuses.add(bus);
                 fallbackOrder++;
