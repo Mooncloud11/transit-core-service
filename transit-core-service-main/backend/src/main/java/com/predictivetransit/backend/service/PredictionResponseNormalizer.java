@@ -17,41 +17,6 @@ import java.util.function.Supplier;
 public class PredictionResponseNormalizer {
 
     /**
-     * Normalizes the basic delay prediction response.
-     * @param raw Raw Map from the AI Engine response.
-     * @param lineCode The bus line code.
-     * @return A sanitized Map with guaranteed keys and types.
-     */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> normalizePredictionResponse(Map raw, String lineCode) {
-        Map<String, Object> normalized = new HashMap<>();
-
-        double delay = safeDouble(raw.get("real_time_delay_min"), 5.0);
-        String statusColor = normalizeStatusColor(raw.get("status_color"), delay);
-        String passengerAdvice = safeString(
-                raw.get("passenger_advice"),
-                "Prediction generated with partial backend normalization.");
-
-        Map<String, Object> rawRouteDetails =
-                (raw.get("route_details") instanceof Map)
-                        ? (Map<String, Object>) raw.get("route_details")
-                        : new HashMap<>();
-
-        Map<String, Object> routeDetails = new HashMap<>();
-        routeDetails.put("line", safeString(rawRouteDetails.get("line"), lineCode));
-        routeDetails.put("monthly_occupancy", safeString(rawRouteDetails.get("monthly_occupancy"), "N/A"));
-        routeDetails.put("crowding_status", normalizeCrowdingStatus(rawRouteDetails.get("crowding_status")));
-
-        normalized.put("real_time_delay_min", delay);
-        normalized.put("status_color", statusColor);
-        normalized.put("passenger_advice", passengerAdvice);
-        normalized.put("route_details", routeDetails);
-        normalized.put("is_fallback", safeBoolean(raw.get("is_fallback"), false));
-
-        return normalized;
-    }
-
-    /**
      * Normalizes the "next buses" response.
      * @param raw Raw Map from the AI Engine response.
      * @param lineCode The bus line code.
@@ -113,39 +78,6 @@ public class PredictionResponseNormalizer {
 
         normalized.put("next_buses", normalizedBuses);
         return normalized;
-    }
-
-    private String normalizeStatusColor(Object value, double delay) {
-        String color = safeString(value, "").toUpperCase();
-
-        if (color.equals("RED") || color.equals("YELLOW") || color.equals("GREEN")) {
-            return color;
-        }
-
-        if (delay > 8.0) {
-            return "RED";
-        }
-        if (delay > 6.0) {
-            return "YELLOW";
-        }
-        return "GREEN";
-    }
-
-    private String normalizeCrowdingStatus(Object value) {
-        String status = safeString(value, "normal").trim().toLowerCase();
-
-        if (status.equals("busy") || status.equals("quiet") || status.equals("normal")) {
-            return status;
-        }
-
-        if (status.equals("crowded")) {
-            return "busy";
-        }
-        if (status.equals("low")) {
-            return "quiet";
-        }
-
-        return "normal";
     }
 
     private String normalizeCrowdingForecast(Object value) {

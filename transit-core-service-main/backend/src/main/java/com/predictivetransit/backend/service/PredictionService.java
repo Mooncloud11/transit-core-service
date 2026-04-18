@@ -72,7 +72,7 @@ public class PredictionService {
                     .retrieve()
                     .body(Map.class);
             if (result != null) {
-                return responseNormalizer.normalizePredictionResponse(result, lineCode);
+                return result;
             }
         } catch (HttpClientErrorException e) {
            log.warn("Python AI HTTP error: {} - {}", e.getStatusCode(), e.getMessage());
@@ -151,13 +151,34 @@ public class PredictionService {
                 "AI service is currently unavailable. Estimated times are based on historical averages.");
         fallback.put("is_fallback", true);
 
-        Map<String, String> routeDetails = new HashMap<>();
-        routeDetails.put("line", lineCode);
-        routeDetails.put("monthly_occupancy", "N/A");
-        routeDetails.put("crowding_status", "normal");
-        fallback.put("route_details", routeDetails);
+        // Keep fallback schema aligned with Python /predict response expected by frontend.
+        Map<String, Integer> lineStopCounts = Map.of(
+                "L01", 14,
+                "L02", 11,
+                "L03", 9,
+                "L04", 12,
+                "L05", 16);
+        int numStops = lineStopCounts.getOrDefault(lineCode, 10);
+        int currentBusStopIndex = Math.min((int) delay % Math.max(1, numStops), numStops - 1);
+
+        List<Double> stopEtas = new java.util.ArrayList<>();
+        for (int i = 0; i < numStops; i++) {
+            if (i <= currentBusStopIndex) {
+                stopEtas.add(0.0);
+            } else {
+                stopEtas.add(roundToOneDecimal(delay + (i - currentBusStopIndex) * 3.5));
+            }
+        }
+
+        fallback.put("line_code", lineCode);
+        fallback.put("current_bus_stop_index", currentBusStopIndex);
+        fallback.put("stop_etas", stopEtas);
 
         return fallback;
+    }
+
+    private double roundToOneDecimal(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 
     /**
