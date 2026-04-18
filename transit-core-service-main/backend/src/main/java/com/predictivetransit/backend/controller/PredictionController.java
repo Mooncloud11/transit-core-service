@@ -43,12 +43,13 @@ public class PredictionController {
      * Used for the "Next Buses" panel in the bottom sheet.
      */
     @Operation(summary = "Next buses prediction", description = "Returns the estimated arrival times of the next 3 buses for a specified line and stop ID.")
-    @GetMapping("/next-buses")
-    public Map<String, Object> getNextBuses(
-            @RequestParam String lineCode,
-            @RequestParam String stopId,
-            @RequestParam(required = false) Integer hour,
-            @RequestParam(required = false) Integer minute) {
-        return predictionService.getNextBuses(lineCode, stopId, hour, minute);
-    }
+@GetMapping("/next-buses")
+public Map<String, Object> getNextBuses(
+        @RequestParam String lineCode,
+        @RequestParam String stopId,
+        @RequestParam(required = false) String destinationId,
+        @RequestParam(required = false) Integer hour,
+        @RequestParam(required = false) Integer minute) {
+    return predictionService.getNextBuses(lineCode, stopId, destinationId, hour, minute);
+}
 }

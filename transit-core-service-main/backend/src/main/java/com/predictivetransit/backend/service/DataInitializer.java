@@ -18,7 +18,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * DataInitializer: Responsible for seeding the database with initial data from CSV files.
+ * DataInitializer: Responsible for seeding the database with initial data from
+ * CSV files.
  * Implements CommandLineRunner to execute logic on application startup.
  */
 @Component
@@ -28,7 +29,8 @@ public class DataInitializer implements CommandLineRunner {
     private final WeatherRepository weatherRepository;
     private final PassengerFlowRepository passengerFlowRepository;
 
-    // Optional external directory for data files (configured in application.properties)
+    // Optional external directory for data files (configured in
+    // application.properties)
     @Value("${transit.data.directory:}")
     private String externalDataDirectory;
 
@@ -42,13 +44,14 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        // Date formatter for parsing timestamps in the CSV files (e.g., "2025-03-01 08:30:00")
+        // Date formatter for parsing timestamps in the CSV files (e.g., "2025-03-01
+        // 08:30:00")
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
         System.out.println(">>> DATA INITIALIZATION STARTED...");
 
         // Load data from CSV if the corresponding database tables are empty
-        loadBusStopsIfEmpty("bus_stops.csv");
+        refreshBusStops("bus_stops.csv");
         loadWeatherIfEmpty("weather_observations.csv", formatter);
         loadPassengerFlowIfEmpty("passenger_flow.csv");
 
@@ -74,10 +77,11 @@ public class DataInitializer implements CommandLineRunner {
                 .atTime(hourOfDay, 0);
     }
 
-    private void loadBusStopsIfEmpty(String path) {
-        if (busStopRepository.count() > 0) {
-            System.out.println("-> Bus stops already exist, seed skipped.");
-            return;
+    private void refreshBusStops(String path) {
+        long existing = busStopRepository.count();
+        if (existing > 0) {
+            System.out.println("-> Refreshing bus stops to sync canonical stop names and coordinates.");
+            busStopRepository.deleteAll();
         }
         loadBusStops(path);
     }
@@ -124,17 +128,22 @@ public class DataInitializer implements CommandLineRunner {
                         "Liberty Park", "Gul Neighborhood", "Camlik Stop", "New Neighborhood", "Health Center",
                         "Cultural Center", "Stadium", "Rectorate", "Faculty of Engineering", "University Campus" });
         stopNamesMap.put("L02",
-                new String[] { "Industrial Site", "Factories Zone", "Business Center", "Organized Industry", "Bridgehead",
+                new String[] { "Industrial Site", "Factories Zone", "Business Center", "Organized Industry",
+                        "Bridgehead",
                         "Market Place", "Courthouse", "Police Headquarters", "State Hospital", "Emergency Service",
                         "Hospital Main Entrance" });
-        stopNamesMap.put("L03", new String[] { "Baglar Neighborhood", "Baglar Park", "Cooperative", "Bus Station", "PTT",
-                "Bazaar Entrance", "Grand Bazaar", "Grand Mosque", "Bazaar Center" });
+        stopNamesMap.put("L03",
+                new String[] { "Baglar Neighborhood", "Baglar Park", "Cooperative", "Bus Station", "PTT",
+                        "Bazaar Entrance", "Grand Bazaar", "Grand Mosque", "Bazaar Center" });
         stopNamesMap.put("L04",
-                new String[] { "Esentepe Terminal", "Esentepe Park", "Yildiz Neighborhood", "Gunes Street", "Bahcelievler",
-                        "Victory Avenue", "Barracks", "Sports Hall", "Shopping Mall", "Post Office", "Government House", "Square" });
+                new String[] { "Esentepe Terminal", "Esentepe Park", "Yildiz Neighborhood", "Gunes Street",
+                        "Bahcelievler",
+                        "Victory Avenue", "Barracks", "Sports Hall", "Shopping Mall", "Post Office", "Government House",
+                        "Square" });
         stopNamesMap.put("L05",
                 new String[] { "Intercity Terminal", "Terminal Exit", "New Road", "Intersection", "Industrial Junction",
-                        "Iron & Steel", "Staff Housing", "Primary School", "Middle School", "High School", "Private Course Street", "Dormitory",
+                        "Iron & Steel", "Staff Housing", "Primary School", "Middle School", "High School",
+                        "Private Course Street", "Dormitory",
                         "Sports Facilities", "Library", "Campus Entrance", "Campus Center" });
 
         try (BufferedReader br = openDataFile(path)) {
@@ -255,7 +264,7 @@ public class DataInitializer implements CommandLineRunner {
             }
             System.out.println("-> Passenger flow loaded: " + count + " rows (failed rows: " + errorCount + ")");
         } catch (Exception e) {
-           System.out.println("ERROR: Failed to read passenger flow data. " + e.getMessage());
+            System.out.println("ERROR: Failed to read passenger flow data. " + e.getMessage());
         }
     }
 }

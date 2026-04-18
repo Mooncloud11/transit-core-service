@@ -17,15 +17,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * PredictionService: The bridge between the Java Backend and the Python AI Engine.
+ * PredictionService: The bridge between the Java Backend and the Python AI
+ * Engine.
  * 
  * Two main responsibilities:
  * 1. getLinePrediction() → Line-based delay forecasting (AI-driven or Fallback)
  * 2. getNextBuses() → Stop-specific next bus estimation (AI-driven or Fallback)
  * 
  * Fallback Mechanism:
- * - Triggered if the Python AI Engine is unreachable or if the AI API (e.g., Gemini) 
- *   returns a 429 quota error. Returns historical averages to keep the Frontend functional.
+ * - Triggered if the Python AI Engine is unreachable or if the AI API (e.g.,
+ * Gemini)
+ * returns a 429 quota error. Returns historical averages to keep the Frontend
+ * functional.
  */
 @Slf4j
 @Service
@@ -33,14 +36,16 @@ public class PredictionService {
     private final PredictionResponseNormalizer responseNormalizer;
     private final RestClient restClient;
 
-    // Python AI Engine base URL (configured via application.properties → python.api.url)
+    // Python AI Engine base URL (configured via application.properties →
+    // python.api.url)
     @Value("${python.api.url:http://localhost:8000}")
     private String PYTHON_AI_URL;
 
     public PredictionService(PredictionResponseNormalizer responseNormalizer) {
         this.responseNormalizer = responseNormalizer;
 
-        // Configure short timeouts to ensure the backend remains responsive even if AI engine is slow
+        // Configure short timeouts to ensure the backend remains responsive even if AI
+        // engine is slow
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(2000);
         requestFactory.setReadTimeout(5000);
@@ -75,11 +80,11 @@ public class PredictionService {
                 return result;
             }
         } catch (HttpClientErrorException e) {
-           log.warn("Python AI HTTP error: {} - {}", e.getStatusCode(), e.getMessage());
+            log.warn("Python AI HTTP error: {} - {}", e.getStatusCode(), e.getMessage());
         } catch (ResourceAccessException e) {
             log.warn("Could not connect to Python AI engine: {}", e.getMessage());
         } catch (Exception e) {
-           log.error("Unexpected error: {}", e.getMessage(), e);
+            log.error("Unexpected error: {}", e.getMessage(), e);
         }
 
         // ═══ FALLBACK: Provide historical average data if AI is unavailable ═══
@@ -90,16 +95,24 @@ public class PredictionService {
      * Next buses prediction for a specific stop.
      * Hits the /next-buses endpoint of the Python AI Engine.
      */
-    @Cacheable(value = "nextBuses", key = "@predictionService.buildNextBusesCacheKey(#lineCode, #stopId, #reqHour, #reqMinute)", condition = "#reqHour != null && #reqMinute != null")
+    @Cacheable(value = "nextBuses", key = "@predictionService.buildNextBusesCacheKey(#lineCode, #stopId, #destinationId, #reqHour, #reqMinute)", condition = "#reqHour != null && #reqMinute != null")
     @SuppressWarnings("unchecked")
-    public Map<String, Object> getNextBuses(String lineCode, String stopId, Integer reqHour, Integer reqMinute) {
+    public Map<String, Object> getNextBuses(String lineCode, String stopId, String destinationId, Integer reqHour,
+            Integer reqMinute) {
         validateTimeParameters(reqHour, reqMinute);
         LocalTime now = LocalTime.now();
         int hour = (reqHour != null) ? reqHour : now.getHour();
         int minute = (reqMinute != null) ? reqMinute : now.getMinute();
 
-        String url = String.format("%s/next-buses?line_code=%s&stop_id=%s&hour=%d&minute=%d",
-                PYTHON_AI_URL, lineCode, stopId, hour, minute);
+        StringBuilder urlBuilder = new StringBuilder(String.format(
+                "%s/next-buses?line_code=%s&stop_id=%s&hour=%d&minute=%d",
+                PYTHON_AI_URL, lineCode, stopId, hour, minute));
+
+        if (destinationId != null && !destinationId.isBlank()) {
+            urlBuilder.append("&destination_id=").append(destinationId);
+        }
+
+        String url = urlBuilder.toString();
 
         try {
             Map result = restClient.get()
@@ -111,7 +124,7 @@ public class PredictionService {
                         result,
                         lineCode,
                         stopId,
-                        () -> generateFallbackNextBuses(lineCode, stopId));
+                        () -> generateFallbackNextBuses(lineCode, stopId, destinationId));
             }
         } catch (HttpClientErrorException e) {
             log.warn("Next buses HTTP error: {}", e.getStatusCode());
@@ -121,13 +134,13 @@ public class PredictionService {
             log.error("Unexpected error while fetching next buses: {}", e.getMessage(), e);
         }
 
-        // ═══ FALLBACK: Provide default arrival times if AI is unavailable ═══
-        return generateFallbackNextBuses(lineCode, stopId);
+        return generateFallbackNextBuses(lineCode, stopId, destinationId);
     }
 
     /**
      * Generates fallback data for delay prediction.
-     * Matches the format expected by the frontend: real_time_delay_min, status_color, passenger_advice.
+     * Matches the format expected by the frontend: real_time_delay_min,
+     * status_color, passenger_advice.
      */
     private Map<String, Object> generateFallbackPrediction(String lineCode) {
         Map<String, Object> fallback = new HashMap<>();
@@ -151,7 +164,8 @@ public class PredictionService {
                 "AI service is currently unavailable. Estimated times are based on historical averages.");
         fallback.put("is_fallback", true);
 
-        // Keep fallback schema aligned with Python /predict response expected by frontend.
+        // Keep fallback schema aligned with Python /predict response expected by
+        // frontend.
         Map<String, Integer> lineStopCounts = Map.of(
                 "L01", 14,
                 "L02", 11,
@@ -184,24 +198,27 @@ public class PredictionService {
     /**
      * Generates fallback data for the next 3 buses at a stop.
      */
-    private Map<String, Object> generateFallbackNextBuses(String lineCode, String stopId) {
-        Map<String, Object> fallback = new HashMap<>();
-        fallback.put("line_id", lineCode);
-        fallback.put("stop_id", stopId);
-        fallback.put("is_fallback", true);
-        fallback.put("weather", "clear");
-        fallback.put("traffic_level", "normal");
+    private Map<String, Object> generateFallbackNextBuses(String lineCode, String stopId, String destinationId) {
+    Map<String, Object> fallback = new HashMap<>();
+    fallback.put("line_id", lineCode);
+    fallback.put("stop_id", stopId);
 
-        // Static estimated arrival times for 3 buses
-        List<Map<String, Object>> buses = List.of(
-                Map.of("bus_order", 1, "estimated_arrival_min", 8.0, "crowding_forecast", "normal", "confidence", 0.7),
-                Map.of("bus_order", 2, "estimated_arrival_min", 22.0, "crowding_forecast", "quiet", "confidence", 0.5),
-                Map.of("bus_order", 3, "estimated_arrival_min", 35.0, "crowding_forecast", "quiet", "confidence", 0.3));
-        fallback.put("next_buses", buses);
-
-        return fallback;
+    if (destinationId != null && !destinationId.isBlank()) {
+        fallback.put("destination_id", destinationId);
     }
 
+    fallback.put("is_fallback", true);
+    fallback.put("weather", "clear");
+    fallback.put("traffic_level", "normal");
+
+    List<Map<String, Object>> buses = List.of(
+            Map.of("bus_order", 1, "estimated_arrival_min", 8.0, "crowding_forecast", "normal", "confidence", 0.7),
+            Map.of("bus_order", 2, "estimated_arrival_min", 22.0, "crowding_forecast", "quiet", "confidence", 0.5),
+            Map.of("bus_order", 3, "estimated_arrival_min", 35.0, "crowding_forecast", "quiet", "confidence", 0.3));
+
+    fallback.put("next_buses", buses);
+    return fallback;
+}
     /**
      * Cache Key Generators for Spring Cache
      */
@@ -210,10 +227,14 @@ public class PredictionService {
         return lineCode + "-" + reqHour + "-" + minuteBucket;
     }
 
-    public String buildNextBusesCacheKey(String lineCode, String stopId, Integer reqHour, Integer reqMinute) {
-        int minuteBucket = reqMinute / 5;
-        return lineCode + "-" + stopId + "-" + reqHour + "-" + minuteBucket;
-    }
+    public String buildNextBusesCacheKey(String lineCode, String stopId, String destinationId, Integer reqHour, Integer reqMinute) {
+    int minuteBucket = reqMinute / 5;
+    String normalizedDestinationId = (destinationId == null || destinationId.isBlank())
+            ? "no-destination"
+            : destinationId;
+
+    return lineCode + "-" + stopId + "-" + normalizedDestinationId + "-" + reqHour + "-" + minuteBucket;
+}
 
     /**
      * Validates that both hour and minute are either present or absent together.
