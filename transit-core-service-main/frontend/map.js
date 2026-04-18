@@ -211,10 +211,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                 li.className = 'bus-card next-bus-card';
                 li.style.setProperty('--hat-renk', hat.renk);
 
-                const crowdText = { busy: 'Crowded', high: 'Crowded', normal: 'Available', quiet: 'Empty', low: 'Empty' };
-                const crowdColor = { busy: '#FF9500', high: '#FF9500', normal: '#34C759', quiet: '#4A90D9', low: '#4A90D9' };
-                const crowdEmoji = { busy: '👥', high: '👥', normal: '🧑', quiet: '💺', low: '💺' };
-                const crowd = bus.crowding_forecast || 'normal';
+                const crowdText = { 
+                    full: 'Full', very_crowded: 'Full', extreme: 'Full', 
+                    busy: 'Crowded', high: 'Crowded', crowded: 'Crowded', 
+                    moderate: 'Moderate', medium: 'Moderate', 
+                    normal: 'Available', available: 'Available', good: 'Available', 
+                    quiet: 'Empty', low: 'Empty', empty: 'Empty' 
+                };
+                const crowdColor = { 
+                    full: '#FF3B30', very_crowded: '#FF3B30', extreme: '#FF3B30', 
+                    busy: '#FF9500', high: '#FF9500', crowded: '#FF9500', 
+                    moderate: '#FFCC00', medium: '#FFCC00', 
+                    normal: '#34C759', available: '#34C759', good: '#34C759', 
+                    quiet: '#4A90D9', low: '#4A90D9', empty: '#4A90D9' 
+                };
+                const crowdEmoji = { 
+                    full: '🛑', very_crowded: '🛑', extreme: '🛑', 
+                    busy: '👥', high: '👥', crowded: '👥', 
+                    moderate: '🧍', medium: '🧍', 
+                    normal: '🧑', available: '🧑', good: '🧑', 
+                    quiet: '💺', low: '💺', empty: '💺' 
+                };
+                const crowd = bus.crowding_forecast ? bus.crowding_forecast.toLowerCase() : 'normal';
                 const confidence = Math.round((bus.confidence || 0.5) * 100);
 
                 li.innerHTML = `

@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let busIdx = hat.aktifOtobus ? hat.aktifOtobus.mevcutDurakIndex : 0;
     let yogunluk = hat.aktifOtobus ? hat.aktifOtobus.yogunluk : 'green';
     const renk = hat.renk || '#FFFFFF';
+    let aiStopEtas = null;
 
     // ── Header ──
     if (hatNameEl) hatNameEl.textContent = `${hat.id} ${hat.ad}`;
@@ -60,7 +61,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (colorMap[statusColor]) {
                 yogunluk = colorMap[statusColor];
             }
+            if (aiData.stop_etas && Array.isArray(aiData.stop_etas)) {
+                aiStopEtas = aiData.stop_etas;
+            } else {
+                // Fallback / Mock ETA if API hasn't implemented it yet
+                aiStopEtas = [];
+                for(let i=0; i<hat.duraklar.length; i++) {
+                    aiStopEtas[i] = i > busIdx ? (i - busIdx) * 2.5 : 0;
+                }
+            }
+            
+            const scrollPos = timeline ? timeline.scrollTop : 0;
             renderTimeline();
+            if (timeline) timeline.scrollTop = scrollPos;
         }
     }
     loadAITahmin();
@@ -136,11 +149,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const rightDiv = document.createElement('div');
             rightDiv.className = 'detail-stop-info-right';
 
-            // Fake time calculation based on index difference
+            // Dynamic time calculation based on AI ETAs
             let timeText = '';
             if(isBus) timeText = '0 min';
             else if (i > busIdx) {
-                timeText = `${(i - busIdx) * 7} min`;
+                if (aiStopEtas === null) {
+                    timeText = '•••'; // Skeleton loader state
+                } else if (aiStopEtas[i] !== undefined && aiStopEtas[i] > 0) {
+                    timeText = `${Math.round(aiStopEtas[i])} min`;
+                } else {
+                    timeText = `${Math.round((i - busIdx) * 2.5)} min`;
+                }
             } else {
                  timeText = '✓ Passed';
             }
