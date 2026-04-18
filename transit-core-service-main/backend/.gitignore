@@ -35,3 +35,6 @@ build/
 *.iml
 __pycache__/
 venv/
+
+data/*.mv.db
+data/*.trace.db

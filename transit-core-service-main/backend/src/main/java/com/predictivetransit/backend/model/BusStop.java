@@ -1,6 +1,8 @@
 package com.predictivetransit.backend.model;
 
- // Burayı kendi paket adına göre düzelt
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+// Burayı kendi paket adına göre düzelt
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -13,13 +15,16 @@ import lombok.Data;
 public class BusStop {
 
     @Id
-    private String stopId;   // bus_stops.csv -> stop_id
-    
-    private String stopName; // bus_stops.csv -> stop_name
-    
-    private double stopLat;  // bus_stops.csv -> stop_lat
-    
-    private double stopLon;  // bus_stops.csv -> stop_lon
-    
-    private String lineId;   // bus_stops.csv -> line_id
+    @JsonIgnore
+    private String id;
+
+    private String stopId;
+
+    private String stopName;
+
+    private double stopLat;
+
+    private double stopLon;
+
+    private String lineId;
 }
