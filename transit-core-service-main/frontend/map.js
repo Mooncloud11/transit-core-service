@@ -211,9 +211,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 li.className = 'bus-card next-bus-card';
                 li.style.setProperty('--hat-renk', hat.renk);
 
-                const crowdText = { busy: 'Crowded', normal: 'Available', quiet: 'Empty' };
-                const crowdColor = { busy: '#FF9500', normal: '#34C759', quiet: '#4A90D9' };
-                const crowdEmoji = { busy: '👥', normal: '🧑', quiet: '💺' };
+                const crowdText = { busy: 'Crowded', high: 'Crowded', normal: 'Available', quiet: 'Empty', low: 'Empty' };
+                const crowdColor = { busy: '#FF9500', high: '#FF9500', normal: '#34C759', quiet: '#4A90D9', low: '#4A90D9' };
+                const crowdEmoji = { busy: '👥', high: '👥', normal: '🧑', quiet: '💺', low: '💺' };
                 const crowd = bus.crowding_forecast || 'normal';
                 const confidence = Math.round((bus.confidence || 0.5) * 100);
 
@@ -266,7 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Fire both requests in parallel
         const [aiData, nextBusData] = await Promise.all([
             TransitAPI.getAITahmin(hatId, selection.simHour, selection.simMinute),
-            kullaniciStopId ? TransitAPI.getNextBuses(hatId, kullaniciStopId, selection.simHour, selection.simMinute) : Promise.resolve(null)
+            kullaniciStopId ? TransitAPI.getNextBuses(hatId, kullaniciStopId, selection.destinationId, selection.simHour, selection.simMinute) : Promise.resolve(null)
         ]);
 
         // Apply AI prediction data

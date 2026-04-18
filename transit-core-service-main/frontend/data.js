@@ -131,12 +131,13 @@ const TransitAPI = {
     //  SIRADAKİ OTOBÜSLER – JAVA BACKEND ÜZERİNDEN
     //  Endpoint: GET /api/predict/next-buses?lineCode=X&stopId=Y
     // ══════════════════════════════════════════
-    getNextBuses: async function (hatId, stopId, simHour, simMinute) {
+    getNextBuses: async function (hatId, stopId, destinationId, simHour, simMinute) {
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), this.AI_TIMEOUT);
 
             let url = `${this.baseUrl}/api/predict/next-buses?lineCode=${hatId}&stopId=${stopId}`;
+            if (destinationId) url += `&destinationId=${destinationId}`;
             if (simHour !== undefined && simMinute !== undefined && simHour !== null) {
                 url += `&hour=${simHour}&minute=${simMinute}`;
             }
