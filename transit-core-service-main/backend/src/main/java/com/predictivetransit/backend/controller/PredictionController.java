@@ -8,13 +8,13 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * PredictionController: Frontend'in AI tahmin verilerini Java Backend üzerinden aldığı endpoint.
- * Frontend → Java Backend (:8080) → Python AI Engine (:8000)
+ * PredictionController: Endpoint where the Frontend receives AI prediction data via the Java Backend.
+ * Communication flow: Frontend → Java Backend (:8080) → Python AI Engine (:8000)
  */
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/predict")
-@Tag(name = "Tahmin İzleme API", description = "Python AI Engine üzerinden gecikme ve sıradaki otobüs tahminlerini getirir")
+@Tag(name = "Prediction Monitoring API", description = "Fetches delay and next-bus predictions from the Python AI Engine")
 public class PredictionController {
 
     private final PredictionService predictionService;
@@ -24,11 +24,11 @@ public class PredictionController {
     }
 
     /**
-     * Hat bazlı gecikme tahmini.
-     * Örnek: GET /api/predict/L01
-     * Frontend bu endpoint'i çağırır, Backend Python AI'dan veriyi alıp döndürür.
+     * Line-based delay prediction.
+     * Example: GET /api/predict/L01
+     * The Frontend calls this endpoint; the Backend fetches data from Python AI and returns it.
      */
-    @Operation(summary = "Hat bazlı gecikme tahmini", description = "Belirtilen otobüs hattı (örn. L01) için o anki beklenen tahmini gecikmeyi döndürür.")
+    @Operation(summary = "Line-based delay prediction", description = "Returns the expected delay for a specified bus line (e.g., L01) at a given time.")
     @GetMapping("/{lineCode}")
     public Map<String, Object> getPrediction(
             @PathVariable String lineCode,
@@ -38,11 +38,11 @@ public class PredictionController {
     }
 
     /**
-     * Sıradaki otobüsler tahmini.
-     * Örnek: GET /api/predict/next-buses?lineCode=L01&stopId=STP-L01-05
-     * Bottom sheet'teki "Sıradaki Otobüsler" paneli için kullanılır.
+     * Next buses prediction.
+     * Example: GET /api/predict/next-buses?lineCode=L01&stopId=STP-L01-05
+     * Used for the "Next Buses" panel in the bottom sheet.
      */
-    @Operation(summary = "Sıradaki otobüsler tahmini", description = "Belirtilen otobüs hattı ve durak id'si için sıradaki 3 otobüsün tahmini geliş süresini döndürür.")
+    @Operation(summary = "Next buses prediction", description = "Returns the estimated arrival times of the next 3 buses for a specified line and stop ID.")
     @GetMapping("/next-buses")
     public Map<String, Object> getNextBuses(
             @RequestParam String lineCode,

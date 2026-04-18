@@ -6,19 +6,27 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * CORS (Cross-Origin Resource Sharing): 
- * Farklı portlardan (Frontend-Backend) gelen isteklerin engellenmemesini sağlar.
+ * CORS (Cross-Origin Resource Sharing) Configuration:
+ * Ensures that requests from different origins (e.g., Frontend on a different port) 
+ * are not blocked by the browser.
  */
 @Configuration
 public class CorsConfig {
 
+    /**
+     * Configures global CORS mappings for the application.
+     * @return a WebMvcConfigurer with CORS settings.
+     */
     @Bean
     public WebMvcConfigurer corsConfigurer() {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/**") // Tüm API uç noktalarını (endpoints) kapsar
-                        .allowedOrigins("*") // Tüm kaynaklara izin ver (Hackathon modu)
+                // Apply CORS settings to all endpoints (/**)
+                registry.addMapping("/**")
+                        // Allow all origins (Hackathon mode - should be restricted in production)
+                        .allowedOrigins("*")
+                        // Allow standard HTTP methods
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                         .allowedHeaders("*");
             }

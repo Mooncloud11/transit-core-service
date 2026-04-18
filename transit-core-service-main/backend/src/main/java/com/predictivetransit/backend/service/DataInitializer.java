@@ -17,6 +17,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+/**
+ * DataInitializer: Responsible for seeding the database with initial data from CSV files.
+ * Implements CommandLineRunner to execute logic on application startup.
+ */
 @Component
 public class DataInitializer implements CommandLineRunner {
 
@@ -24,6 +28,7 @@ public class DataInitializer implements CommandLineRunner {
     private final WeatherRepository weatherRepository;
     private final PassengerFlowRepository passengerFlowRepository;
 
+    // Optional external directory for data files (configured in application.properties)
     @Value("${transit.data.directory:}")
     private String externalDataDirectory;
 
@@ -37,13 +42,12 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-
-        // Tarih formatlayıcı (CSV'deki "2025-03-01 08:30:00" formatını Java'ya çevirmek
-        // için)
+        // Date formatter for parsing timestamps in the CSV files (e.g., "2025-03-01 08:30:00")
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
         System.out.println(">>> DATA INITIALIZATION STARTED...");
 
+        // Load data from CSV if the corresponding database tables are empty
         loadBusStopsIfEmpty("bus_stops.csv");
         loadWeatherIfEmpty("weather_observations.csv", formatter);
         loadPassengerFlowIfEmpty("passenger_flow.csv");
@@ -113,25 +117,25 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void loadBusStops(String path) {
-        // Durak İsimlerini frontend ile eşleşecek şekilde tanımlayalım
+        // Map stop names to line IDs to match frontend expectations
         java.util.Map<String, String[]> stopNamesMap = new java.util.HashMap<>();
         stopNamesMap.put("L01",
-                new String[] { "Merkez Terminal", "Belediye Meydanı", "Cumhuriyet Caddesi", "Atatürk Bulvarı",
-                        "Hürriyet Parkı", "Gül Mahallesi", "Çamlık Durağı", "Yeni Mahalle", "Sağlık Ocağı",
-                        "Kültür Merkezi", "Stadyum", "Rektörlük", "Mühendislik Fakültesi", "Üniversite Kampüsü" });
+                new String[] { "Central Terminal", "City Hall Square", "Republic Avenue", "Ataturk Boulevard",
+                        "Liberty Park", "Gul Neighborhood", "Camlik Stop", "New Neighborhood", "Health Center",
+                        "Cultural Center", "Stadium", "Rectorate", "Faculty of Engineering", "University Campus" });
         stopNamesMap.put("L02",
-                new String[] { "Sanayi Sitesi", "Fabrikalar Bölgesi", "İş Merkezi", "Organize Sanayi", "Köprübaşı",
-                        "Pazar Yeri", "Adliye", "Emniyet Müdürlüğü", "Devlet Hastanesi", "Acil Servis",
-                        "Hastane Ana Giriş" });
-        stopNamesMap.put("L03", new String[] { "Bağlar Mahallesi", "Bağlar Parkı", "Kooperatif", "Otogar", "PTT",
-                "Çarşı Girişi", "Kapalı Çarşı", "Büyük Cami", "Çarşı Merkez" });
+                new String[] { "Industrial Site", "Factories Zone", "Business Center", "Organized Industry", "Bridgehead",
+                        "Market Place", "Courthouse", "Police Headquarters", "State Hospital", "Emergency Service",
+                        "Hospital Main Entrance" });
+        stopNamesMap.put("L03", new String[] { "Baglar Neighborhood", "Baglar Park", "Cooperative", "Bus Station", "PTT",
+                "Bazaar Entrance", "Grand Bazaar", "Grand Mosque", "Bazaar Center" });
         stopNamesMap.put("L04",
-                new String[] { "Esentepe Terminal", "Esentepe Parkı", "Yıldız Mahallesi", "Güneş Sokak", "Bahçelievler",
-                        "Zafer Caddesi", "Kışla", "Spor Salonu", "AVM", "Postane", "Hükümet Konağı", "Meydan" });
+                new String[] { "Esentepe Terminal", "Esentepe Park", "Yildiz Neighborhood", "Gunes Street", "Bahcelievler",
+                        "Victory Avenue", "Barracks", "Sports Hall", "Shopping Mall", "Post Office", "Government House", "Square" });
         stopNamesMap.put("L05",
-                new String[] { "Şehirlerarası Terminal", "Terminal Çıkışı", "Yeni Yol", "Kavşak", "Sanayi Kavşağı",
-                        "Demir Çelik", "Lojmanlar", "İlkokul", "Ortaokul", "Lise", "Dershane Sokak", "Yurt",
-                        "Spor Tesisleri", "Kütüphane", "Kampüs Girişi", "Kampüs Merkez" });
+                new String[] { "Intercity Terminal", "Terminal Exit", "New Road", "Intersection", "Industrial Junction",
+                        "Iron & Steel", "Staff Housing", "Primary School", "Middle School", "High School", "Private Course Street", "Dormitory",
+                        "Sports Facilities", "Library", "Campus Entrance", "Campus Center" });
 
         try (BufferedReader br = openDataFile(path)) {
             br.readLine(); // Başlığı atla
@@ -156,8 +160,7 @@ public class DataInitializer implements CommandLineRunner {
                         }
                     }
 
-                    // Aynı durak ID si zaten eklendiyse atla (örneğin iki hat aynı durağı
-                    // kullanıyorsa)
+                    // Skip if the record already exists (e.g., stop shared by multiple lines)
                     if (busStopRepository.existsById(recordId)) {
                         continue;
                     }
@@ -243,10 +246,10 @@ public class DataInitializer implements CommandLineRunner {
                     count++;
                 } catch (Exception e) {
                     errorCount++;
-                    // Sadece ilk hatayı ekrana basalım ki terminal çöplüğe dönmesin
+                    // Only log the first error to avoid terminal clutter
                     if (errorCount == 1) {
-                        System.out.println("Bus stop parsing error example: " + e.getMessage());
-                        System.out.println("Invalid bus stop row: " + line);
+                        System.out.println("Passenger flow parsing error example: " + e.getMessage());
+                        System.out.println("Invalid row: " + line);
                     }
                 }
             }

@@ -17,15 +17,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * PredictionService: Java Backend ile Python AI Engine arasındaki köprü.
+ * PredictionService: The bridge between the Java Backend and the Python AI Engine.
  * 
- * İki ana görev:
- * 1. getLinePrediction() → Hat bazlı gecikme tahmini (AI veya Fallback)
- * 2. getNextBuses() → Durak için sıradaki otobüs tahmini (AI veya Fallback)
+ * Two main responsibilities:
+ * 1. getLinePrediction() → Line-based delay forecasting (AI-driven or Fallback)
+ * 2. getNextBuses() → Stop-specific next bus estimation (AI-driven or Fallback)
  * 
- * Fallback Mekanizması:
- * - Python AI Engine çöktüğünde veya Gemini 429 quota hatası verdiğinde
- * Frontend'in beklediği formatta yedek veri döndürür.
+ * Fallback Mechanism:
+ * - Triggered if the Python AI Engine is unreachable or if the AI API (e.g., Gemini) 
+ *   returns a 429 quota error. Returns historical averages to keep the Frontend functional.
  */
 @Slf4j
 @Service
@@ -33,13 +33,14 @@ public class PredictionService {
     private final PredictionResponseNormalizer responseNormalizer;
     private final RestClient restClient;
 
-    // Python AI Engine adresi (application.properties → python.api.url)
+    // Python AI Engine base URL (configured via application.properties → python.api.url)
     @Value("${python.api.url:http://localhost:8000}")
     private String PYTHON_AI_URL;
 
     public PredictionService(PredictionResponseNormalizer responseNormalizer) {
         this.responseNormalizer = responseNormalizer;
 
+        // Configure short timeouts to ensure the backend remains responsive even if AI engine is slow
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(2000);
         requestFactory.setReadTimeout(5000);
@@ -50,9 +51,9 @@ public class PredictionService {
     }
 
     /**
-     * Hat bazlı gecikme tahmini.
-     * Python AI Engine'in /predict endpoint'ine istek atar.
-     * Hata durumunda Frontend'in beklediği formatta fallback döner.
+     * Line-based delay prediction.
+     * Hits the /predict endpoint of the Python AI Engine.
+     * Automatically returns fallback data if any error occurs.
      */
     @Cacheable(value = "predictions", key = "@predictionService.buildPredictionCacheKey(#lineCode, #reqHour, #reqMinute)", condition = "#reqHour != null && #reqMinute != null")
     @SuppressWarnings("unchecked")
@@ -81,13 +82,13 @@ public class PredictionService {
            log.error("Unexpected error: {}", e.getMessage(), e);
         }
 
-        // ═══ FALLBACK: Frontend'in beklediği formatta yedek veri ═══
+        // ═══ FALLBACK: Provide historical average data if AI is unavailable ═══
         return generateFallbackPrediction(lineCode);
     }
 
     /**
-     * Sıradaki otobüsler tahmini.
-     * Python AI Engine'in /next-buses endpoint'ine istek atar.
+     * Next buses prediction for a specific stop.
+     * Hits the /next-buses endpoint of the Python AI Engine.
      */
     @Cacheable(value = "nextBuses", key = "@predictionService.buildNextBusesCacheKey(#lineCode, #stopId, #reqHour, #reqMinute)", condition = "#reqHour != null && #reqMinute != null")
     @SuppressWarnings("unchecked")
@@ -120,19 +121,18 @@ public class PredictionService {
             log.error("Unexpected error while fetching next buses: {}", e.getMessage(), e);
         }
 
-        // ═══ FALLBACK: Sıradaki otobüsler yedek verisi ═══
+        // ═══ FALLBACK: Provide default arrival times if AI is unavailable ═══
         return generateFallbackNextBuses(lineCode, stopId);
     }
 
     /**
-     * Gecikme tahmini için fallback veri.
-     * Frontend'in beklediği tam formatta: real_time_delay_min, status_color,
-     * passenger_advice
+     * Generates fallback data for delay prediction.
+     * Matches the format expected by the frontend: real_time_delay_min, status_color, passenger_advice.
      */
     private Map<String, Object> generateFallbackPrediction(String lineCode) {
         Map<String, Object> fallback = new HashMap<>();
 
-        // Hat bazlı ortalama gecikmeler (CSV'den türetilmiş sabit değerler)
+        // Static average delays derived from historical CSV analysis
         Map<String, Double> avgDelays = Map.of(
                 "L01", 4.5, "L02", 5.2, "L03", 3.8, "L04", 6.1, "L05", 4.0);
 
@@ -161,7 +161,7 @@ public class PredictionService {
     }
 
     /**
-     * Sıradaki otobüsler için fallback veri.
+     * Generates fallback data for the next 3 buses at a stop.
      */
     private Map<String, Object> generateFallbackNextBuses(String lineCode, String stopId) {
         Map<String, Object> fallback = new HashMap<>();
@@ -171,7 +171,7 @@ public class PredictionService {
         fallback.put("weather", "clear");
         fallback.put("traffic_level", "normal");
 
-        // 3 sıradaki otobüs için varsayılan süreler
+        // Static estimated arrival times for 3 buses
         List<Map<String, Object>> buses = List.of(
                 Map.of("bus_order", 1, "estimated_arrival_min", 8.0, "crowding_forecast", "normal", "confidence", 0.7),
                 Map.of("bus_order", 2, "estimated_arrival_min", 22.0, "crowding_forecast", "quiet", "confidence", 0.5),
@@ -181,8 +181,11 @@ public class PredictionService {
         return fallback;
     }
 
+    /**
+     * Cache Key Generators for Spring Cache
+     */
     public String buildPredictionCacheKey(String lineCode, Integer reqHour, Integer reqMinute) {
-        int minuteBucket = reqMinute / 5;
+        int minuteBucket = reqMinute / 5; // Group by 5-minute windows
         return lineCode + "-" + reqHour + "-" + minuteBucket;
     }
 
@@ -191,6 +194,9 @@ public class PredictionService {
         return lineCode + "-" + stopId + "-" + reqHour + "-" + minuteBucket;
     }
 
+    /**
+     * Validates that both hour and minute are either present or absent together.
+     */
     private void validateTimeParameters(Integer reqHour, Integer reqMinute) {
         boolean hourProvided = reqHour != null;
         boolean minuteProvided = reqMinute != null;

@@ -8,9 +8,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+/**
+ * PredictionResponseNormalizer: Ensures that raw responses from the Python AI Engine
+ * are transformed into a consistent, stable format that the Frontend expects.
+ * It handles data type conversions and applies default values if the AI response is incomplete.
+ */
 @Component
 public class PredictionResponseNormalizer {
 
+    /**
+     * Normalizes the basic delay prediction response.
+     * @param raw Raw Map from the AI Engine response.
+     * @param lineCode The bus line code.
+     * @return A sanitized Map with guaranteed keys and types.
+     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> normalizePredictionResponse(Map raw, String lineCode) {
         Map<String, Object> normalized = new HashMap<>();
@@ -40,6 +51,14 @@ public class PredictionResponseNormalizer {
         return normalized;
     }
 
+    /**
+     * Normalizes the "next buses" response.
+     * @param raw Raw Map from the AI Engine response.
+     * @param lineCode The bus line code.
+     * @param stopId The bus stop ID.
+     * @param fallbackSupplier A supplier that providing fallback data if normalization fails.
+     * @return A sanitized Map with normalized bus arrival details.
+     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> normalizeNextBusesResponse(
             Map raw,
