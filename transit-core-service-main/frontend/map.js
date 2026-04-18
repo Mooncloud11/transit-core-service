@@ -282,8 +282,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ══════════════════════════════════════
     //  AI PREDICTION + NEXT BUS LOAD
     // ══════════════════════════════════════
-    async function loadAIDataAndRender(hatId) {
-        showAILoading();
+    async function loadAIDataAndRender(hatId, isBackgroundFetch = false) {
+        if (!isBackgroundFetch) {
+            showAILoading();
+        }
 
         // Fire both requests in parallel
         const [aiData, nextBusData] = await Promise.all([
@@ -327,13 +329,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Keep default tahminiSure from TransitData (or set to static)
         }
 
-        hideAILoading();
+        if (!isBackgroundFetch) {
+            hideAILoading();
+        }
         renderRoute(hatId);
         renderNextBuses(nextBusData);
     }
 
     // ── Initial load ──
     loadAIDataAndRender(seciliHatId);
+
+    // ── Background Polling (30s) ──
+    setInterval(() => {
+        console.log("🔄 Background polling for map data...");
+        loadAIDataAndRender(seciliHatId, true);
+    }, 30000);
 
     // ── FAB → Route Detail ──
     fabBtn.addEventListener('click', () => {

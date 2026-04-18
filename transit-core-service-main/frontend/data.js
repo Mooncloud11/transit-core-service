@@ -31,9 +31,33 @@ const TransitAPI = {
     baseUrl: 'http://localhost:8080',
     gercekDuraklar: [],
     AI_TIMEOUT: 8000, // 8 saniye timeout
+    backendHealthy: false, // Sistem sağlığı durumu
+
+    // ── Backend Sağlık Kontrolü ──
+    checkHealth: async function () {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 3000); // 3 sn bekle
+            const response = await fetch(`${this.baseUrl}/actuator/health`, { signal: controller.signal });
+            clearTimeout(timeout);
+            if (response.ok) {
+                const data = await response.json();
+                this.backendHealthy = (data.status === "UP");
+                if (this.backendHealthy) console.log("✅ Backend is UP and Healthy");
+            } else {
+                this.backendHealthy = false;
+                console.warn("⚠️ Backend health check failed with status: " + response.status);
+            }
+        } catch (error) {
+            this.backendHealthy = false;
+            console.warn("❌ Backend is DOWN or unreachable");
+        }
+        return this.backendHealthy;
+    },
 
     // ── Backend'den Durakları Çek ──
     initStops: async function () {
+        await this.checkHealth(); // Önce sağlık kontrolü yap
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 5000);

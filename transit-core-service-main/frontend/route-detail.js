@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let yogunluk = hat.aktifOtobus ? hat.aktifOtobus.yogunluk : 'green';
     const renk = hat.renk || '#FFFFFF';
     let aiStopEtas = null;
+    let isMockEta = false;
 
     // ── Header ──
     if (hatNameEl) hatNameEl.textContent = `${hat.id} ${hat.ad}`;
@@ -63,9 +64,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (aiData.stop_etas && Array.isArray(aiData.stop_etas)) {
                 aiStopEtas = aiData.stop_etas;
+                isMockEta = false;
             } else {
                 // Fallback / Mock ETA if API hasn't implemented it yet
                 aiStopEtas = [];
+                isMockEta = true;
                 for(let i=0; i<hat.duraklar.length; i++) {
                     aiStopEtas[i] = i > busIdx ? (i - busIdx) * 2.5 : 0;
                 }
@@ -77,6 +80,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     loadAITahmin();
+
+    // ── Background Polling (30s) ──
+    setInterval(() => {
+        console.log("🔄 Background polling for route-detail data...");
+        loadAITahmin();
+    }, 30000);
 
     // ── Toggle Search ──
     if (searchToggleBtn && searchBarContainer) {
@@ -156,9 +165,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (aiStopEtas === null) {
                     timeText = '•••'; // Skeleton loader state
                 } else if (aiStopEtas[i] !== undefined && aiStopEtas[i] > 0) {
-                    timeText = `${Math.round(aiStopEtas[i])} min`;
+                    const etaVal = Math.round(aiStopEtas[i]);
+                    timeText = isMockEta ? `~${etaVal} min` : `${etaVal} min`;
                 } else {
-                    timeText = `${Math.round((i - busIdx) * 2.5)} min`;
+                    const fallbackVal = Math.round((i - busIdx) * 2.5);
+                    timeText = `~${fallbackVal} min`;
                 }
             } else {
                  timeText = '✓ Passed';

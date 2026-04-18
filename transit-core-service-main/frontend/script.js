@@ -46,6 +46,7 @@ function setupAutocomplete(inputId, dropdownId, containerId, mode) {
             });
         });
         console.log("✅ Loaded", tumDuraklar.length, "stops for autocomplete");
+        }
     }
 
     input.addEventListener('input', function () {
