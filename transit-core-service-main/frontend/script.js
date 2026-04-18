@@ -17,27 +17,23 @@ let kilitliHatId = null;
 let kilitliHatAdi = null;
 
 // ── Autocomplete ──
-async function setupAutocomplete(inputId, dropdownId, containerId, mode) {
+function setupAutocomplete(inputId, dropdownId, containerId, mode) {
     const input = document.getElementById(inputId);
     const dropdown = document.getElementById(dropdownId);
     const container = document.getElementById(containerId);
 
-    // Fetch from Java Backend with timeout
     let tumDuraklar = [];
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        const response = await fetch('http://localhost:8080/api/stops', { signal: controller.signal });
-        clearTimeout(timeout);
-        if (response.ok) {
-            tumDuraklar = await response.json();
-        }
-    } catch (e) {
-        console.warn("Backend unavailable, using local data.", e);
-    }
-
-    // Fallback: use local TransitData
-    if (tumDuraklar.length === 0 && typeof TransitData !== 'undefined') {
+    
+    function populateDuraklar() {
+        if (tumDuraklar.length > 0) return;
+        if (typeof TransitAPI !== 'undefined' && TransitAPI.gercekDuraklar && TransitAPI.gercekDuraklar.length > 0) {
+            tumDuraklar = TransitAPI.gercekDuraklar.map(d => ({
+                stopName: d.stopName || d.stop_name || d.id,
+                lineId: d.lineId || "L01",
+                lineName: (typeof TransitData !== 'undefined' && TransitData.hatlar[d.lineId]) ? TransitData.hatlar[d.lineId].ad : (d.lineId || "L01"),
+                stopId: d.stopId || d.id
+            }));
+        } else if (typeof TransitData !== 'undefined') {
         Object.entries(TransitData.hatlar).forEach(([hatId, hat]) => {
             hat.duraklar.forEach((durakAdi, idx) => {
                 const stopIds = TransitData.durakStopIdMap[hatId];
@@ -49,10 +45,11 @@ async function setupAutocomplete(inputId, dropdownId, containerId, mode) {
                 });
             });
         });
-        console.log("✅ Loaded", tumDuraklar.length, "stops from local TransitData");
+        console.log("✅ Loaded", tumDuraklar.length, "stops for autocomplete");
     }
 
     input.addEventListener('input', function () {
+        populateDuraklar();
         const q = this.value.toLowerCase();
         if (q.length < 1 || tumDuraklar.length === 0) {
             dropdown.style.display = 'none';
@@ -240,6 +237,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // --- Auto-Lock Line if manually typed ---
+            if (!kilitliHatId && baslangic) {
+                if (typeof TransitAPI !== 'undefined') {
+                    const hatlar = TransitAPI.getDurakHatlari(baslangic.trim());
+                    if (hatlar.length > 0) {
+                        kilitliHatId = hatlar[0].hatId;
+                    }
+                }
+            }
+
             // --- Invalid Input Validation ---
             let validStops = [];
             if (typeof TransitAPI !== 'undefined') {
@@ -251,7 +258,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const isStartValid = validStops.includes(baslangic.trim().toLowerCase());
-            const isEndValid = validStops.includes(varis.trim().toLowerCase());
+            
+            let isEndValid = false;
+            if (kilitliHatId && typeof TransitData !== 'undefined' && TransitData.hatlar[kilitliHatId]) {
+                const lockedLineStops = TransitData.hatlar[kilitliHatId].duraklar.map(d => d.toLowerCase());
+                isEndValid = lockedLineStops.includes(varis.trim().toLowerCase());
+            } else {
+                isEndValid = validStops.includes(varis.trim().toLowerCase());
+            }
 
             if (!isStartValid || !isEndValid) {
                 if (!isStartValid) {
@@ -270,40 +284,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Save selection
             if (typeof TransitAPI !== 'undefined') {
-                let finalStopId = null;
-                let targetStopId = null;
-                try {
-                    const response = await fetch('http://localhost:8080/api/stops');
-                    if (response.ok) {
-                        const duraklar = await response.json();
-                        const bulunan = duraklar.find(d =>
-                            d.stopName &&
-                            baslangic &&
-                            d.stopName.trim().toLowerCase() === baslangic.trim().toLowerCase() &&
-                            d.lineId === kilitliHatId
-                        );
-                        if (bulunan) finalStopId = bulunan.stopId;
-
-                        const bulunanTarget = duraklar.find(d =>
-                            d.stopName &&
-                            varis &&
-                            d.stopName.trim().toLowerCase() === varis.trim().toLowerCase() &&
-                            d.lineId === kilitliHatId
-                        );
-                        if (bulunanTarget) targetStopId = bulunanTarget.stopId;
-                    }
-                } catch (e) {
-                    // Use local stopId
-                    finalStopId = TransitAPI.getStopId(baslangic, kilitliHatId);
-                    targetStopId = TransitAPI.getStopId(varis, kilitliHatId);
-                }
-
-                if (!finalStopId) {
-                    finalStopId = TransitAPI.getStopId(baslangic, kilitliHatId);
-                }
-                if (!targetStopId) {
-                    targetStopId = TransitAPI.getStopId(varis, kilitliHatId);
-                }
+                let finalStopId = TransitAPI.getStopId(baslangic, kilitliHatId);
+                let targetStopId = TransitAPI.getStopId(varis, kilitliHatId);
 
                 TransitAPI.saveSelection({
                     baslangic,

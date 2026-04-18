@@ -276,6 +276,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const colorMap = { 'red': 'red', 'yellow': 'yellow', 'green': 'green' };
             const statusColor = (aiData.status_color || '').toLowerCase();
             TransitData.hatlar[hatId].aktifOtobus.yogunluk = colorMap[statusColor] || 'yellow';
+            
+            if (aiData.current_bus_stop_index !== undefined) {
+                TransitData.hatlar[hatId].aktifOtobus.mevcutDurakIndex = aiData.current_bus_stop_index;
+            }
 
             // AI advice message
             const subtitleEl = document.querySelector('.subtitle');
@@ -290,6 +294,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 fallbackBanner.style.display = 'none';
             }
+        } else {
+            // AI is completely offline or failed
+            fallbackBanner.style.display = 'flex';
+            const subtitleEl = document.querySelector('.subtitle');
+            if (subtitleEl) {
+                subtitleEl.innerHTML = `🤖 <b>AI:</b> Offline. Using standard schedule.`;
+                subtitleEl.style.color = '#FFA500';
+            }
+            // Keep default tahminiSure from TransitData (or set to static)
         }
 
         hideAILoading();
@@ -303,7 +316,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── FAB → Route Detail ──
     fabBtn.addEventListener('click', () => {
         if (navigator.vibrate) navigator.vibrate(20);
-        TransitAPI.saveSelection({ ...TransitAPI.getSelection(), seciliHat: seciliHatId, kullaniciDurakIndex });
+        TransitAPI.saveSelection({ ...TransitAPI.getSelection(), hatId: seciliHatId, kullaniciDurakIndex });
         const container = document.getElementById('appContainer');
         document.body.classList.add('transitioning');
         container.classList.add('page-transition-out');
