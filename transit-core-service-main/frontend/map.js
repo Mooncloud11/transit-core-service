@@ -232,7 +232,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     normal: '🧑', available: '🧑', good: '🧑', 
                     quiet: '💺', low: '💺', empty: '💺' 
                 };
-                const crowd = bus.crowding_forecast ? bus.crowding_forecast.toLowerCase() : 'normal';
+                let crowdRaw = bus.crowding_forecast ? bus.crowding_forecast.toString().trim().toLowerCase() : 'normal';
+                
+                // If the AI sends a completely unknown word, fallback to 'normal' to prevent undefined
+                const crowd = crowdText[crowdRaw] ? crowdRaw : 'normal';
+                
                 const confidence = Math.round((bus.confidence || 0.5) * 100);
 
                 li.innerHTML = `
