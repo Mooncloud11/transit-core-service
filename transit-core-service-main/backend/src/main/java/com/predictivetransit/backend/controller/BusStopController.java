@@ -6,7 +6,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import java.util.List;
 
 
@@ -15,7 +14,6 @@ import java.util.List;
  * BusStopController: Handles REST API requests related to bus stops.
  * Provides endpoints to retrieve all stops or search for specific ones.
  */
-@CrossOrigin(origins = "*") 
 @RestController
 @RequestMapping("/api/stops")
 public class BusStopController {

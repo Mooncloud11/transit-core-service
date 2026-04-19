@@ -39,21 +39,18 @@ public class AiEngineHealthIndicator implements HealthIndicator {
     public Health health() {
         try {
             // Attempt to fetch the health status from the Python AI Service
-            String response = restClient.get()
+            restClient.get()
                     .uri(pythonAiUrl + "/health")
                     .retrieve()
                     .body(String.class);
 
             return Health.up()
                     .withDetail("aiEngine", "reachable")
-                    .withDetail("endpoint", pythonAiUrl + "/health")
-                    .withDetail("response", response)
                     .build();
         } catch (Exception e) {
             // If the connection fails, mark the health indicator as DOWN
             return Health.down()
                     .withDetail("aiEngine", "unreachable")
-                    .withDetail("endpoint", pythonAiUrl + "/health")
                     .withDetail("error", e.getMessage())
                     .build();
         }

@@ -10,8 +10,8 @@ import java.util.function.Supplier;
 
 /**
  * PredictionResponseNormalizer: Ensures that raw responses from the Python AI Engine
- * are transformed into a consistent, stable format that the Frontend expects.
- * It handles data type conversions and applies default values if the AI response is incomplete.
+ * are transformed into a consistent, stable format expected by the frontend.
+ * It handles data type conversions and applies default values when the AI response is incomplete.
  */
 @Component
 public class PredictionResponseNormalizer {
@@ -21,7 +21,7 @@ public class PredictionResponseNormalizer {
      * @param raw Raw Map from the AI Engine response.
      * @param lineCode The bus line code.
      * @param stopId The bus stop ID.
-     * @param fallbackSupplier A supplier that providing fallback data if normalization fails.
+    * @param fallbackSupplier A supplier that provides fallback data if normalization fails.
      * @return A sanitized Map with normalized bus arrival details.
      */
     @SuppressWarnings("unchecked")

@@ -10,11 +10,15 @@ import org.springframework.web.client.RestClient;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.util.UriBuilder;
 
+import java.net.URI;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * PredictionService: The bridge between the Java Backend and the Python AI
@@ -33,6 +37,8 @@ import java.util.Map;
 @Slf4j
 @Service
 public class PredictionService {
+    private static final int MAX_AI_ATTEMPTS = 2;
+
     private final PredictionResponseNormalizer responseNormalizer;
     private final RestClient restClient;
 
@@ -68,23 +74,15 @@ public class PredictionService {
         int hour = (reqHour != null) ? reqHour : now.getHour();
         int minute = (reqMinute != null) ? reqMinute : now.getMinute();
 
-        String url = String.format("%s/predict?line_code=%s&hour=%d&minute=%d",
-                PYTHON_AI_URL, lineCode, hour, minute);
+        Map<String, Object> result = callAiWithRetry(uriBuilder -> uriBuilder
+                .path("/predict")
+                .queryParam("line_code", lineCode)
+                .queryParam("hour", hour)
+                .queryParam("minute", minute)
+                .build());
 
-        try {
-            Map result = restClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .body(Map.class);
-            if (result != null) {
-                return result;
-            }
-        } catch (HttpClientErrorException e) {
-            log.warn("Python AI HTTP error: {} - {}", e.getStatusCode(), e.getMessage());
-        } catch (ResourceAccessException e) {
-            log.warn("Could not connect to Python AI engine: {}", e.getMessage());
-        } catch (Exception e) {
-            log.error("Unexpected error: {}", e.getMessage(), e);
+        if (result != null) {
+            return result;
         }
 
         // ═══ FALLBACK: Provide historical average data if AI is unavailable ═══
@@ -104,37 +102,107 @@ public class PredictionService {
         int hour = (reqHour != null) ? reqHour : now.getHour();
         int minute = (reqMinute != null) ? reqMinute : now.getMinute();
 
-        StringBuilder urlBuilder = new StringBuilder(String.format(
-                "%s/next-buses?line_code=%s&stop_id=%s&hour=%d&minute=%d",
-                PYTHON_AI_URL, lineCode, stopId, hour, minute));
+        Map<String, Object> result = callAiWithRetry(uriBuilder -> {
+            UriBuilder builder = uriBuilder
+                    .path("/next-buses")
+                    .queryParam("line_code", lineCode)
+                    .queryParam("stop_id", stopId)
+                    .queryParam("hour", hour)
+                    .queryParam("minute", minute);
 
-        if (destinationId != null && !destinationId.isBlank()) {
-            urlBuilder.append("&destination_id=").append(destinationId);
-        }
-
-        String url = urlBuilder.toString();
-
-        try {
-            Map result = restClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .body(Map.class);
-            if (result != null) {
-                return responseNormalizer.normalizeNextBusesResponse(
-                        result,
-                        lineCode,
-                        stopId,
-                        () -> generateFallbackNextBuses(lineCode, stopId, destinationId));
+            if (destinationId != null && !destinationId.isBlank()) {
+                builder.queryParam("destination_id", destinationId);
             }
-        } catch (HttpClientErrorException e) {
-            log.warn("Next buses HTTP error: {}", e.getStatusCode());
-        } catch (ResourceAccessException e) {
-            log.warn("Could not connect to Python AI engine (next-buses): {}", e.getMessage());
-        } catch (Exception e) {
-            log.error("Unexpected error while fetching next buses: {}", e.getMessage(), e);
+
+            return builder.build();
+        });
+
+        if (result != null) {
+            return responseNormalizer.normalizeNextBusesResponse(
+                    result,
+                    lineCode,
+                    stopId,
+                    () -> generateFallbackNextBuses(lineCode, stopId, destinationId));
         }
 
         return generateFallbackNextBuses(lineCode, stopId, destinationId);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> callAiWithRetry(Function<UriBuilder, URI> uriFactory) {
+        List<String> errors = new ArrayList<>();
+
+        for (int attempt = 1; attempt <= MAX_AI_ATTEMPTS; attempt++) {
+            try {
+                Map result = restClient.get()
+                        .uri(uriBuilder -> {
+                            UriBuilder baseBuilder = uriBuilder
+                                    .scheme("http")
+                                    .host(extractHost(PYTHON_AI_URL))
+                                    .port(extractPort(PYTHON_AI_URL));
+                            return uriFactory.apply(baseBuilder);
+                        })
+                        .retrieve()
+                        .body(Map.class);
+
+                if (result != null) {
+                    return result;
+                }
+            } catch (HttpClientErrorException e) {
+                errors.add("HTTP " + e.getStatusCode().value());
+                if (e.getStatusCode().is4xxClientError() && e.getStatusCode().value() != 429) {
+                    break;
+                }
+            } catch (ResourceAccessException e) {
+                errors.add("Resource access: " + e.getMessage());
+            } catch (Exception e) {
+                errors.add("Unexpected: " + e.getMessage());
+            }
+
+            if (attempt < MAX_AI_ATTEMPTS) {
+                try {
+                    Thread.sleep(150L * attempt);
+                } catch (InterruptedException interruptedException) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            log.warn("AI call failed after {} attempt(s): {}", MAX_AI_ATTEMPTS, String.join(" | ", errors));
+        }
+        return null;
+    }
+
+    private String extractHost(String baseUrl) {
+        String sanitized = baseUrl.replace("http://", "").replace("https://", "");
+        int slashIndex = sanitized.indexOf('/');
+        if (slashIndex >= 0) {
+            sanitized = sanitized.substring(0, slashIndex);
+        }
+
+        int colonIndex = sanitized.indexOf(':');
+        return colonIndex >= 0 ? sanitized.substring(0, colonIndex) : sanitized;
+    }
+
+    private int extractPort(String baseUrl) {
+        String sanitized = baseUrl.replace("http://", "").replace("https://", "");
+        int slashIndex = sanitized.indexOf('/');
+        if (slashIndex >= 0) {
+            sanitized = sanitized.substring(0, slashIndex);
+        }
+
+        int colonIndex = sanitized.indexOf(':');
+        if (colonIndex >= 0) {
+            String portText = sanitized.substring(colonIndex + 1);
+            try {
+                return Integer.parseInt(portText);
+            } catch (NumberFormatException ignored) {
+                return 8000;
+            }
+        }
+        return 8000;
     }
 
     /**

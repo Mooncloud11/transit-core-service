@@ -16,6 +16,10 @@ import org.springframework.core.io.ClassPathResource;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * DataInitializer: Responsible for seeding the database with initial data from
@@ -78,12 +82,19 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void refreshBusStops(String path) {
+        List<BusStop> refreshedStops = parseBusStops(path);
+        if (refreshedStops.isEmpty()) {
+            throw new IllegalStateException("Bus stop seed produced 0 rows. Startup aborted to avoid inconsistent API responses.");
+        }
+
         long existing = busStopRepository.count();
         if (existing > 0) {
             System.out.println("-> Refreshing bus stops to sync canonical stop names and coordinates.");
-            busStopRepository.deleteAll();
         }
-        loadBusStops(path);
+
+        busStopRepository.deleteAll();
+        busStopRepository.saveAll(refreshedStops);
+        System.out.println("-> Bus stops refreshed successfully: " + refreshedStops.size() + " rows");
     }
 
     private BufferedReader openDataFile(String fileName) throws Exception {
@@ -120,7 +131,7 @@ public class DataInitializer implements CommandLineRunner {
         loadPassengerFlow(path);
     }
 
-    private void loadBusStops(String path) {
+    private List<BusStop> parseBusStops(String path) {
         // Map stop names to line IDs to match frontend expectations
         java.util.Map<String, String[]> stopNamesMap = new java.util.HashMap<>();
         stopNamesMap.put("L01",
@@ -147,10 +158,13 @@ public class DataInitializer implements CommandLineRunner {
                         "Sports Facilities", "Library", "Campus Entrance", "Campus Center" });
 
         try (BufferedReader br = openDataFile(path)) {
-            br.readLine(); // Başlığı atla
+            br.readLine(); // Skip the CSV header row.
             String line;
             int count = 0;
             int errorCount = 0;
+            List<BusStop> parsedStops = new ArrayList<>();
+            Set<String> seenRecordIds = new HashSet<>();
+
             while ((line = br.readLine()) != null) {
                 String[] v = line.split(",");
                 if (v.length < 6)
@@ -169,8 +183,8 @@ public class DataInitializer implements CommandLineRunner {
                         }
                     }
 
-                    // Skip if the record already exists (e.g., stop shared by multiple lines)
-                    if (busStopRepository.existsById(recordId)) {
+                    // Skip duplicate rows in the source file.
+                    if (!seenRecordIds.add(recordId)) {
                         continue;
                     }
 
@@ -181,7 +195,7 @@ public class DataInitializer implements CommandLineRunner {
                     stop.setStopLat(Double.parseDouble(v[4]));
                     stop.setStopLon(Double.parseDouble(v[5]));
                     stop.setLineId(lineId);
-                    busStopRepository.save(stop);
+                    parsedStops.add(stop);
                     count++;
                 } catch (Exception e) {
                     errorCount++;
@@ -192,8 +206,12 @@ public class DataInitializer implements CommandLineRunner {
                 }
             }
             System.out.println("-> Bus stops loaded: " + count + " rows (failed rows: " + errorCount + ")");
+            if (count == 0) {
+                throw new IllegalStateException("No valid bus stop rows could be parsed from " + path);
+            }
+            return parsedStops;
         } catch (Exception e) {
-            System.out.println("ERROR: Failed to read bus stop data. " + e.getMessage());
+            throw new IllegalStateException("Failed to read bus stop data from " + path + ": " + e.getMessage(), e);
         }
     }
 
