@@ -192,4 +192,4 @@ const TransitAPI = {
     }
 };
 
-TransitAPI.initStops();
+TransitAPI.initPromise = TransitAPI.initStops();

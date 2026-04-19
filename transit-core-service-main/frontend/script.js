@@ -174,7 +174,11 @@ function navigateWithTransition(url) {
 }
 
 // ═══ INIT ═══
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Wait for backend stops to load before setting up autocomplete
+    if (typeof TransitAPI !== 'undefined' && TransitAPI.initPromise) {
+        try { await TransitAPI.initPromise; } catch(e) { console.warn('Backend init failed, using local data'); }
+    }
     setupAutocomplete('start-input', 'start-dropdown', 'start-container', 'baslangic');
     setupAutocomplete('end-input', 'end-dropdown', 'end-container', 'bitis');
     updateClock();
@@ -220,17 +224,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnNext) {
         btnNext.addEventListener('click', async (e) => {
             e.preventDefault();
-            const baslangic = document.getElementById('start-input').value;
-            const varis = document.getElementById('end-input').value;
+            const baslangic = document.getElementById('start-input').value.trim();
+            const varis = document.getElementById('end-input').value.trim();
 
             if (!baslangic || !varis) {
                 if (!baslangic) {
                     const box = document.querySelector('#start-container .glass-input-box');
-                    if (box) box.classList.add('shake');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
                 }
                 if (!varis) {
                     const box = document.querySelector('#end-container .glass-input-box');
-                    if (box) box.classList.add('shake');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
                 }
                 setTimeout(() => {
                     document.querySelectorAll('.shake').forEach(el => el.classList.remove('shake'));
@@ -241,41 +245,57 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- Auto-Lock Line if manually typed ---
             if (!kilitliHatId && baslangic) {
                 if (typeof TransitAPI !== 'undefined') {
-                    const hatlar = TransitAPI.getDurakHatlari(baslangic.trim());
+                    const hatlar = TransitAPI.getDurakHatlari(baslangic);
                     if (hatlar.length > 0) {
                         kilitliHatId = hatlar[0].hatId;
                     }
                 }
             }
 
-            // --- Invalid Input Validation ---
+            // --- Build comprehensive valid stop list (backend + local) ---
             let validStops = [];
             if (typeof TransitAPI !== 'undefined') {
-                validStops = TransitAPI.getTumDuraklar().map(d => d.toLowerCase());
+                // Include backend API stops
+                if (TransitAPI.gercekDuraklar && TransitAPI.gercekDuraklar.length > 0) {
+                    TransitAPI.gercekDuraklar.forEach(d => {
+                        const name = d.stopName || d.stop_name || d.id;
+                        if (name) validStops.push(name.toLowerCase());
+                    });
+                }
+                // Also include local TransitData stops
+                if (typeof TransitData !== 'undefined') {
+                    Object.values(TransitData.hatlar).forEach(hat => 
+                        hat.duraklar.forEach(d => validStops.push(d.toLowerCase()))
+                    );
+                }
+                validStops = [...new Set(validStops)];
             } else if (typeof TransitData !== 'undefined') {
                 const set = new Set();
                 Object.values(TransitData.hatlar).forEach(hat => hat.duraklar.forEach(d => set.add(d.toLowerCase())));
                 validStops = [...set];
             }
 
-            const isStartValid = validStops.includes(baslangic.trim().toLowerCase());
+            const isStartValid = validStops.includes(baslangic.toLowerCase());
             
+            // Destination validation: try locked line first, then fallback to all lines
             let isEndValid = false;
             if (kilitliHatId && typeof TransitData !== 'undefined' && TransitData.hatlar[kilitliHatId]) {
                 const lockedLineStops = TransitData.hatlar[kilitliHatId].duraklar.map(d => d.toLowerCase());
-                isEndValid = lockedLineStops.includes(varis.trim().toLowerCase());
-            } else {
-                isEndValid = validStops.includes(varis.trim().toLowerCase());
+                isEndValid = lockedLineStops.includes(varis.toLowerCase());
+            }
+            // Fallback: check all lines if locked line didn't match
+            if (!isEndValid) {
+                isEndValid = validStops.includes(varis.toLowerCase());
             }
 
             if (!isStartValid || !isEndValid) {
                 if (!isStartValid) {
                     const box = document.querySelector('#start-container .glass-input-box');
-                    if (box) box.classList.add('shake');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
                 }
                 if (!isEndValid) {
                     const box = document.querySelector('#end-container .glass-input-box');
-                    if (box) box.classList.add('shake');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
                 }
                 setTimeout(() => {
                     document.querySelectorAll('.shake').forEach(el => el.classList.remove('shake'));
