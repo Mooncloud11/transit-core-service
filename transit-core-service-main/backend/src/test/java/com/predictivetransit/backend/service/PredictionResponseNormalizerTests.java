@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PredictionResponseNormalizerTests {
@@ -50,5 +51,6 @@ class PredictionResponseNormalizerTests {
         assertEquals(1, buses.size());
         assertEquals("busy", buses.get(0).get("crowding_forecast"));
         assertEquals(1.0, buses.get(0).get("confidence"));
+        assertFalse(buses.get(0).containsKey("planned_arrival_min"));
     }
 }

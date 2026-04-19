@@ -52,7 +52,6 @@ public class PredictionResponseNormalizer {
 
                 Map<String, Object> bus = new HashMap<>();
                 bus.put("bus_order", safeInt(rawBus.get("bus_order"), fallbackOrder));
-                bus.put("planned_arrival_min", safeDouble(rawBus.get("planned_arrival_min"), fallbackOrder * 15.0));
                 bus.put("estimated_arrival_min", safeDouble(rawBus.get("estimated_arrival_min"), fallbackOrder * 15.0));
 
                 if (fallbackOrder == 1) {
