@@ -4,6 +4,10 @@ import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
 
+/**
+ * PassengerFlow Entity: Represents historical passenger volume data at bus stops.
+ * This data is used by the AI engine to forecast crowding levels.
+ */
 @Entity
 @Table(name = "passenger_flow")
 @Data

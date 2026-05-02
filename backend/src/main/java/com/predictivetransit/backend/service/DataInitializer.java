@@ -5,11 +5,27 @@ import com.predictivetransit.backend.repository.*;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import java.io.BufferedReader;
-import java.io.FileReader;
+import java.io.InputStreamReader;
+import org.springframework.core.io.ClassPathResource;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
+/**
+ * DataInitializer: Responsible for seeding the database with initial data from
+ * CSV files.
+ * Implements CommandLineRunner to execute logic on application startup.
+ */
 @Component
 public class DataInitializer implements CommandLineRunner {
 
@@ -17,9 +33,14 @@ public class DataInitializer implements CommandLineRunner {
     private final WeatherRepository weatherRepository;
     private final PassengerFlowRepository passengerFlowRepository;
 
-    public DataInitializer(BusStopRepository busStopRepository, 
-                           WeatherRepository weatherRepository, 
-                           PassengerFlowRepository passengerFlowRepository) {
+    // Optional external directory for data files (configured in
+    // application.properties)
+    @Value("${transit.data.directory:}")
+    private String externalDataDirectory;
+
+    public DataInitializer(BusStopRepository busStopRepository,
+            WeatherRepository weatherRepository,
+            PassengerFlowRepository passengerFlowRepository) {
         this.busStopRepository = busStopRepository;
         this.weatherRepository = weatherRepository;
         this.passengerFlowRepository = passengerFlowRepository;
@@ -27,42 +48,134 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        String basePath = "backend/predictive_transit_data/";
-        
-        // Tarih formatlayıcı (CSV'deki "2025-03-01 08:30:00" formatını Java'ya çevirmek için)
+        // Date formatter for parsing timestamps in the CSV files (e.g., "2025-03-01
+        // 08:30:00")
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-        System.out.println(">>> VERİ YÜKLEME İŞLEMİ BAŞLIYOR...");
+        System.out.println(">>> DATA INITIALIZATION STARTED...");
 
-        loadBusStops(basePath + "bus_stops.csv");
-        loadWeather(basePath + "weather_observations.csv", formatter);
-        loadPassengerFlow(basePath + "stop_arrivals.csv", formatter); // Veya stop_arrivals.csv
-        
-        System.out.println(">>> TÜM VERİLER BAŞARIYLA YÜKLENDİ!");
+        // Load data from CSV if the corresponding database tables are empty
+        refreshBusStops("bus_stops.csv");
+        loadWeatherIfEmpty("weather_observations.csv", formatter);
+        loadPassengerFlowIfEmpty("passenger_flow.csv");
+
+        System.out.println(">>> ALL DATA LOADED SUCCESSFULLY!");
     }
 
-    private void loadBusStops(String path) {
-        // Durak İsimlerini frontend ile eşleşecek şekilde tanımlayalım
-        java.util.Map<String, String[]> stopNamesMap = new java.util.HashMap<>();
-        stopNamesMap.put("L01", new String[]{"Merkez Terminal", "Belediye Meydanı", "Cumhuriyet Caddesi", "Atatürk Bulvarı", "Hürriyet Parkı", "Gül Mahallesi", "Çamlık Durağı", "Yeni Mahalle", "Sağlık Ocağı", "Kültür Merkezi", "Stadyum", "Rektörlük", "Mühendislik Fakültesi", "Üniversite Kampüsü"});
-        stopNamesMap.put("L02", new String[]{"Sanayi Sitesi", "Fabrikalar Bölgesi", "İş Merkezi", "Organize Sanayi", "Köprübaşı", "Pazar Yeri", "Adliye", "Emniyet Müdürlüğü", "Devlet Hastanesi", "Acil Servis", "Hastane Ana Giriş"});
-        stopNamesMap.put("L03", new String[]{"Bağlar Mahallesi", "Bağlar Parkı", "Kooperatif", "Otogar", "PTT", "Çarşı Girişi", "Kapalı Çarşı", "Büyük Cami", "Çarşı Merkez"});
-        stopNamesMap.put("L04", new String[]{"Esentepe Terminal", "Esentepe Parkı", "Yıldız Mahallesi", "Güneş Sokak", "Bahçelievler", "Zafer Caddesi", "Kışla", "Spor Salonu", "AVM", "Postane", "Hükümet Konağı", "Meydan"});
-        stopNamesMap.put("L05", new String[]{"Şehirlerarası Terminal", "Terminal Çıkışı", "Yeni Yol", "Kavşak", "Sanayi Kavşağı", "Demir Çelik", "Lojmanlar", "İlkokul", "Ortaokul", "Lise", "Dershane Sokak", "Yurt", "Spor Tesisleri", "Kütüphane", "Kampüs Girişi", "Kampüs Merkez"});
+    private LocalDateTime buildPassengerFlowTimestamp(String[] v) {
+        int hourOfDay = Integer.parseInt(v[3].trim());
+        int dayOfWeek = Integer.parseInt(v[4].trim());
 
-        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
-            br.readLine(); // Başlığı atla
+        if (hourOfDay < 0 || hourOfDay > 23) {
+            throw new IllegalArgumentException("Invalid hour_of_day value: " + hourOfDay);
+        }
+
+        if (dayOfWeek < 0 || dayOfWeek > 6) {
+            throw new IllegalArgumentException("Invalid day_of_week value: " + dayOfWeek);
+        }
+
+        LocalDate referenceWeekStart = LocalDate.of(2025, 1, 6);
+
+        return referenceWeekStart
+                .plusDays(dayOfWeek)
+                .atTime(hourOfDay, 0);
+    }
+
+    private void refreshBusStops(String path) {
+        List<BusStop> refreshedStops = parseBusStops(path);
+        if (refreshedStops.isEmpty()) {
+            throw new IllegalStateException("Bus stop seed produced 0 rows. Startup aborted to avoid inconsistent API responses.");
+        }
+
+        long existing = busStopRepository.count();
+        if (existing > 0) {
+            System.out.println("-> Refreshing bus stops to sync canonical stop names and coordinates.");
+        }
+
+        busStopRepository.deleteAll();
+        busStopRepository.saveAll(refreshedStops);
+        System.out.println("-> Bus stops refreshed successfully: " + refreshedStops.size() + " rows");
+    }
+
+    private BufferedReader openDataFile(String fileName) throws Exception {
+        Resource resource = resolveDataResource(fileName);
+        return new BufferedReader(new InputStreamReader(resource.getInputStream()));
+    }
+
+    private Resource resolveDataResource(String fileName) {
+        if (externalDataDirectory != null && !externalDataDirectory.trim().isEmpty()) {
+            Path externalPath = Path.of(externalDataDirectory, fileName);
+            if (Files.exists(externalPath)) {
+                return new org.springframework.core.io.FileSystemResource(externalPath);
+            }
+
+            throw new IllegalStateException("External data file not found: " + externalPath);
+        }
+
+        return new ClassPathResource("data/" + fileName);
+    }
+
+    private void loadWeatherIfEmpty(String path, DateTimeFormatter formatter) {
+        if (weatherRepository.count() > 0) {
+            System.out.println("-> Weather data already exists, seed skipped.");
+            return;
+        }
+        loadWeather(path, formatter);
+    }
+
+    private void loadPassengerFlowIfEmpty(String path) {
+        if (passengerFlowRepository.count() > 0) {
+            System.out.println("-> Passenger flow data already exists, seed skipped.");
+            return;
+        }
+        loadPassengerFlow(path);
+    }
+
+    private List<BusStop> parseBusStops(String path) {
+        // Map stop names to line IDs to match frontend expectations
+        java.util.Map<String, String[]> stopNamesMap = new java.util.HashMap<>();
+        stopNamesMap.put("L01",
+                new String[] { "Central Terminal", "City Hall Square", "Republic Avenue", "Ataturk Boulevard",
+                        "Liberty Park", "Gul Neighborhood", "Camlik Stop", "New Neighborhood", "Health Center",
+                        "Cultural Center", "Stadium", "Rectorate", "Faculty of Engineering", "University Campus" });
+        stopNamesMap.put("L02",
+                new String[] { "Industrial Site", "Factories Zone", "Business Center", "Organized Industry",
+                        "Bridgehead",
+                        "Market Place", "Courthouse", "Police Headquarters", "State Hospital", "Emergency Service",
+                        "Hospital Main Entrance" });
+        stopNamesMap.put("L03",
+                new String[] { "Baglar Neighborhood", "Baglar Park", "Cooperative", "Bus Station", "PTT",
+                        "Bazaar Entrance", "Grand Bazaar", "Grand Mosque", "Bazaar Center" });
+        stopNamesMap.put("L04",
+                new String[] { "Esentepe Terminal", "Esentepe Park", "Yildiz Neighborhood", "Gunes Street",
+                        "Bahcelievler",
+                        "Victory Avenue", "Barracks", "Sports Hall", "Shopping Mall", "Post Office", "Government House",
+                        "Square" });
+        stopNamesMap.put("L05",
+                new String[] { "Intercity Terminal", "Terminal Exit", "New Road", "Intersection", "Industrial Junction",
+                        "Iron & Steel", "Staff Housing", "Primary School", "Middle School", "High School",
+                        "Private Course Street", "Dormitory",
+                        "Sports Facilities", "Library", "Campus Entrance", "Campus Center" });
+
+        try (BufferedReader br = openDataFile(path)) {
+            br.readLine(); // Skip the CSV header row.
             String line;
             int count = 0;
+            int errorCount = 0;
+            List<BusStop> parsedStops = new ArrayList<>();
+            Set<String> seenRecordIds = new HashSet<>();
+
             while ((line = br.readLine()) != null) {
                 String[] v = line.split(",");
-                if (v.length < 6) continue;
+                if (v.length < 6)
+                    continue;
                 try {
                     String stopId = v[0];
-                    String lineId = v[1]; // L01, vs.
+                    String lineId = v[1];
+                    String recordId = lineId + "::" + stopId;
                     int sequence = Integer.parseInt(v[3]);
 
-                    String stopName = "Bilinmeyen Durak";
+                    String stopName = "unknown stop";
                     if (stopNamesMap.containsKey(lineId)) {
                         String[] names = stopNamesMap.get(lineId);
                         if (sequence > 0 && sequence <= names.length) {
@@ -70,91 +183,106 @@ public class DataInitializer implements CommandLineRunner {
                         }
                     }
 
-                    // Aynı durak ID si zaten eklendiyse atla (örneğin iki hat aynı durağı kullanıyorsa)
-                    if(busStopRepository.findById(stopId).isPresent()) {
+                    // Skip duplicate rows in the source file.
+                    if (!seenRecordIds.add(recordId)) {
                         continue;
                     }
 
                     BusStop stop = new BusStop();
+                    stop.setId(recordId);
                     stop.setStopId(stopId);
-                    stop.setStopName(stopName); 
+                    stop.setStopName(stopName);
                     stop.setStopLat(Double.parseDouble(v[4]));
                     stop.setStopLon(Double.parseDouble(v[5]));
                     stop.setLineId(lineId);
-                    busStopRepository.save(stop);
+                    parsedStops.add(stop);
                     count++;
                 } catch (Exception e) {
-                    // Hatalı satırı atla
+                    errorCount++;
+                    if (errorCount == 1) {
+                        System.out.println("Bus stop parsing error example: " + e.getMessage());
+                        System.out.println("Invalid bus stop row: " + line);
+                    }
                 }
             }
-            System.out.println("-> Duraklar Yüklendi: " + count + " adet");
+            System.out.println("-> Bus stops loaded: " + count + " rows (failed rows: " + errorCount + ")");
+            if (count == 0) {
+                throw new IllegalStateException("No valid bus stop rows could be parsed from " + path);
+            }
+            return parsedStops;
         } catch (Exception e) {
-            System.out.println("HATA: Durak verisi okunamadı. " + e.getMessage());
+            throw new IllegalStateException("Failed to read bus stop data from " + path + ": " + e.getMessage(), e);
         }
     }
 
     private void loadWeather(String path, DateTimeFormatter formatter) {
-        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
-            br.readLine(); 
+        try (BufferedReader br = openDataFile(path)) {
+            br.readLine();
             String line;
             int count = 0;
+            int errorCount = 0;
             while ((line = br.readLine()) != null) {
                 String[] v = line.split(",");
-                if (v.length < 10) continue;
+                if (v.length < 10)
+                    continue;
                 try {
                     WeatherObservation obs = new WeatherObservation();
                     obs.setTimestamp(LocalDateTime.parse(v[1], formatter)); // Index 1: timestamp
-                    obs.setTemperature(Double.parseDouble(v[5]));           // Index 5: temperature_c
-                    obs.setPrecipitation(Double.parseDouble(v[7]));         // Index 7: precipitation_mm
-                    obs.setWindSpeed(Double.parseDouble(v[9]));             // Index 9: wind_speed_kmh
+                    obs.setTemperature(Double.parseDouble(v[5])); // Index 5: temperature_c
+                    obs.setPrecipitation(Double.parseDouble(v[7])); // Index 7: precipitation_mm
+                    obs.setWindSpeed(Double.parseDouble(v[9])); // Index 9: wind_speed_kmh
                     weatherRepository.save(obs);
                     count++;
                 } catch (Exception e) {
+                    errorCount++;
+                    if (errorCount == 1) {
+                        System.out.println("Weather parsing error example: " + e.getMessage());
+                        System.out.println("Invalid weather row: " + line);
+                    }
                 }
             }
-            System.out.println("-> Hava Durumu Yüklendi: " + count + " adet");
+            System.out.println("-> Weather observations loaded: " + count + " rows (failed rows: " + errorCount + ")");
         } catch (Exception e) {
-            System.out.println("HATA: Hava durumu verisi okunamadı. " + e.getMessage());
+            System.out.println("ERROR: Failed to read weather data. " + e.getMessage());
         }
     }
 
-    private void loadPassengerFlow(String path, DateTimeFormatter formatter) {
-    try (BufferedReader br = new BufferedReader(new FileReader(path))) {
-        String header = br.readLine(); 
-        System.out.println(">>> STOP_ARRIVALS BAŞLIK (HEADER): " + header);
+    private void loadPassengerFlow(String path) {
+        try (BufferedReader br = openDataFile(path)) {
+            String header = br.readLine();
+            System.out.println(">>> PASSENGER_FLOW HEADER: " + header);
 
-        String line;
-        int count = 0;
-        int errorCount = 0;
-        
-        while ((line = br.readLine()) != null) {
-            String[] v = line.split(",");
-            if (v.length < 2) continue; 
-            
-            try {
-                PassengerFlow flow = new PassengerFlow();
-                flow.setStopId(v[0]); 
-                flow.setTimestamp(LocalDateTime.now()); 
-                
-                // Hata muhtemelen burada: Sütun sayısına veya veri tipine (Double/Integer) takılıyor
-                // Double olarak alıp int'e (Integer) çevirmeyi deniyoruz
-                double passCount = Double.parseDouble(v[v.length - 1].trim());
-                flow.setPassengerCount((int) passCount); 
-                
-                passengerFlowRepository.save(flow);
-                count++;
-            } catch (Exception e) {
-                errorCount++;
-                // Sadece ilk hatayı ekrana basalım ki terminal çöplüğe dönmesin
-                if (errorCount == 1) {
-                    System.out.println("HATA DETAYI (Örnek): " + e.getMessage());
-                    System.out.println("HATALI SATIR: " + line);
+            String line;
+            int count = 0;
+            int errorCount = 0;
+
+            while ((line = br.readLine()) != null) {
+                String[] v = line.split(",");
+                if (v.length < 9)
+                    continue;
+
+                try {
+                    PassengerFlow flow = new PassengerFlow();
+                    flow.setStopId(v[0]);
+                    flow.setTimestamp(buildPassengerFlowTimestamp(v));
+
+                    double passCount = Double.parseDouble(v[8].trim());
+                    flow.setPassengerCount((int) passCount);
+
+                    passengerFlowRepository.save(flow);
+                    count++;
+                } catch (Exception e) {
+                    errorCount++;
+                    // Only log the first error to avoid terminal clutter
+                    if (errorCount == 1) {
+                        System.out.println("Passenger flow parsing error example: " + e.getMessage());
+                        System.out.println("Invalid row: " + line);
+                    }
                 }
             }
+            System.out.println("-> Passenger flow loaded: " + count + " rows (failed rows: " + errorCount + ")");
+        } catch (Exception e) {
+            System.out.println("ERROR: Failed to read passenger flow data. " + e.getMessage());
         }
-        System.out.println("-> Yolcu Akışı Yüklendi: " + count + " adet (Hata alınan satır: " + errorCount + ")");
-    } catch (Exception e) {
-        System.out.println("HATA: Dosya okunamadı. " + e.getMessage());
     }
-}
 }

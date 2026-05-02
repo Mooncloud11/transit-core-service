@@ -1,7 +1,13 @@
-.env
-.fake
+ai-engine/venv/
+ai-engine/__pycache__/
+*.pyc
+backend/target/
+backend/.mvn/
+backend/mvnw
+backend/mvnw.cmd
 .vscode/
-
-# H2 database artifacts generated at runtime
-data/*.mv.db
-data/*.trace.db
+.fake
+.env
+# H2 Database files
+*.mv.db
+*.trace.db

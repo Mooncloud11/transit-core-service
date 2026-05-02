@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Read selection ──
     const selection = typeof TransitAPI !== 'undefined' ? TransitAPI.getSelection() : {};
-    const hatId = selection.seciliHat || 'L01';
+    const hatId = selection.hatId || selection.seciliHat || 'L01';
     const hat = (typeof TransitData !== 'undefined' && TransitData.hatlar) ? TransitData.hatlar[hatId] : null;
     const kullaniciDurakIdx = selection.kullaniciDurakIndex !== undefined ? selection.kullaniciDurakIndex : 6;
 
@@ -35,14 +35,57 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    const busIdx = hat.aktifOtobus ? hat.aktifOtobus.mevcutDurakIndex : 0;
-    const yogunluk = hat.aktifOtobus ? hat.aktifOtobus.yogunluk : 'green';
+    let busIdx = hat.aktifOtobus ? hat.aktifOtobus.mevcutDurakIndex : 0;
+    let yogunluk = hat.aktifOtobus ? hat.aktifOtobus.yogunluk : 'green';
     const renk = hat.renk || '#FFFFFF';
+    let aiStopEtas = null;
+    let isMockEta = false;
 
     // ── Header ──
     if (hatNameEl) hatNameEl.textContent = `${hat.id} ${hat.ad}`;
     if (hatMetaEl) hatMetaEl.textContent = `${hat.duraklar.length} stops • Est. ${hat.tahminiSure || 0} min`;
     if (timeline) timeline.style.setProperty('--hat-renk', renk);
+
+    // ── Fetch AI Data dynamically ──
+    async function loadAITahmin() {
+        if (typeof TransitAPI === 'undefined') return;
+        const aiData = await TransitAPI.getAITahmin(hatId, selection.simHour, selection.simMinute);
+        if (aiData) {
+            if (aiData.current_bus_stop_index !== undefined) {
+                busIdx = aiData.current_bus_stop_index;
+            }
+            if (aiData.real_time_delay_min !== undefined) {
+                if (hatMetaEl) hatMetaEl.textContent = `${hat.duraklar.length} stops • Est. ${aiData.real_time_delay_min} min`;
+            }
+            const colorMap = { 'red': 'red', 'yellow': 'yellow', 'green': 'green' };
+            const statusColor = (aiData.status_color || '').toLowerCase();
+            if (colorMap[statusColor]) {
+                yogunluk = colorMap[statusColor];
+            }
+            if (aiData.stop_etas && Array.isArray(aiData.stop_etas)) {
+                aiStopEtas = aiData.stop_etas;
+                isMockEta = false;
+            } else {
+                // Fallback / Mock ETA if API hasn't implemented it yet
+                aiStopEtas = [];
+                isMockEta = true;
+                for(let i=0; i<hat.duraklar.length; i++) {
+                    aiStopEtas[i] = i > busIdx ? (i - busIdx) * 2.5 : 0;
+                }
+            }
+            
+            const scrollPos = timeline ? timeline.scrollTop : 0;
+            renderTimeline();
+            if (timeline) timeline.scrollTop = scrollPos;
+        }
+    }
+    loadAITahmin();
+
+    // ── Background Polling (30s) ──
+    setInterval(() => {
+        console.log("🔄 Background polling for route-detail data...");
+        loadAITahmin();
+    }, 30000);
 
     // ── Toggle Search ──
     if (searchToggleBtn && searchBarContainer) {
@@ -115,11 +158,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const rightDiv = document.createElement('div');
             rightDiv.className = 'detail-stop-info-right';
 
-            // Fake time calculation based on index difference
+            // Dynamic time calculation based on AI ETAs
             let timeText = '';
             if(isBus) timeText = '0 min';
             else if (i > busIdx) {
-                timeText = `${(i - busIdx) * 7} min`;
+                if (aiStopEtas === null) {
+                    timeText = '•••'; // Skeleton loader state
+                } else if (aiStopEtas[i] !== undefined && aiStopEtas[i] > 0) {
+                    const etaVal = Math.round(aiStopEtas[i]);
+                    timeText = isMockEta ? `~${etaVal} min` : `${etaVal} min`;
+                } else {
+                    const fallbackVal = Math.round((i - busIdx) * 2.5);
+                    timeText = `~${fallbackVal} min`;
+                }
             } else {
                  timeText = '✓ Passed';
             }

@@ -211,10 +211,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                 li.className = 'bus-card next-bus-card';
                 li.style.setProperty('--hat-renk', hat.renk);
 
-                const crowdText = { busy: 'Crowded', normal: 'Available', quiet: 'Empty' };
-                const crowdColor = { busy: '#FF9500', normal: '#34C759', quiet: '#4A90D9' };
-                const crowdEmoji = { busy: '👥', normal: '🧑', quiet: '💺' };
-                const crowd = bus.crowding_forecast || 'normal';
+                const crowdText = { 
+                    full: 'Full', very_crowded: 'Full', extreme: 'Full', 
+                    busy: 'Crowded', high: 'Crowded', crowded: 'Crowded', 
+                    moderate: 'Moderate', medium: 'Moderate', 
+                    normal: 'Available', available: 'Available', good: 'Available', 
+                    quiet: 'Empty', low: 'Empty', empty: 'Empty' 
+                };
+                const crowdColor = { 
+                    full: '#FF3B30', very_crowded: '#FF3B30', extreme: '#FF3B30', 
+                    busy: '#FF9500', high: '#FF9500', crowded: '#FF9500', 
+                    moderate: '#FFCC00', medium: '#FFCC00', 
+                    normal: '#34C759', available: '#34C759', good: '#34C759', 
+                    quiet: '#4A90D9', low: '#4A90D9', empty: '#4A90D9' 
+                };
+                const crowdEmoji = { 
+                    full: '🛑', very_crowded: '🛑', extreme: '🛑', 
+                    busy: '👥', high: '👥', crowded: '👥', 
+                    moderate: '🧍', medium: '🧍', 
+                    normal: '🧑', available: '🧑', good: '🧑', 
+                    quiet: '💺', low: '💺', empty: '💺' 
+                };
+                let crowdRaw = bus.crowding_forecast ? bus.crowding_forecast.toString().trim().toLowerCase() : 'normal';
+                
+                // If the AI sends a completely unknown word, fallback to 'normal' to prevent undefined
+                const crowd = crowdText[crowdRaw] ? crowdRaw : 'normal';
+                
                 const confidence = Math.round((bus.confidence || 0.5) * 100);
 
                 li.innerHTML = `
@@ -260,13 +282,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ══════════════════════════════════════
     //  AI PREDICTION + NEXT BUS LOAD
     // ══════════════════════════════════════
-    async function loadAIDataAndRender(hatId) {
-        showAILoading();
+    async function loadAIDataAndRender(hatId, isBackgroundFetch = false) {
+        if (!isBackgroundFetch) {
+            showAILoading();
+        }
 
         // Fire both requests in parallel
         const [aiData, nextBusData] = await Promise.all([
             TransitAPI.getAITahmin(hatId, selection.simHour, selection.simMinute),
-            kullaniciStopId ? TransitAPI.getNextBuses(hatId, kullaniciStopId, selection.simHour, selection.simMinute) : Promise.resolve(null)
+            kullaniciStopId ? TransitAPI.getNextBuses(hatId, kullaniciStopId, selection.destinationId, selection.simHour, selection.simMinute) : Promise.resolve(null)
         ]);
 
         // Apply AI prediction data
@@ -276,6 +300,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const colorMap = { 'red': 'red', 'yellow': 'yellow', 'green': 'green' };
             const statusColor = (aiData.status_color || '').toLowerCase();
             TransitData.hatlar[hatId].aktifOtobus.yogunluk = colorMap[statusColor] || 'yellow';
+            
+            if (aiData.current_bus_stop_index !== undefined) {
+                TransitData.hatlar[hatId].aktifOtobus.mevcutDurakIndex = aiData.current_bus_stop_index;
+            }
 
             // AI advice message
             const subtitleEl = document.querySelector('.subtitle');
@@ -290,9 +318,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 fallbackBanner.style.display = 'none';
             }
+        } else {
+            // AI is completely offline or failed
+            fallbackBanner.style.display = 'flex';
+            const subtitleEl = document.querySelector('.subtitle');
+            if (subtitleEl) {
+                subtitleEl.innerHTML = `🤖 <b>AI:</b> Offline. Using standard schedule.`;
+                subtitleEl.style.color = '#FFA500';
+            }
+            // Keep default tahminiSure from TransitData (or set to static)
         }
 
-        hideAILoading();
+        if (!isBackgroundFetch) {
+            hideAILoading();
+        }
         renderRoute(hatId);
         renderNextBuses(nextBusData);
     }
@@ -300,10 +339,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Initial load ──
     loadAIDataAndRender(seciliHatId);
 
+    // ── Background Polling (30s) ──
+    setInterval(() => {
+        console.log("🔄 Background polling for map data...");
+        loadAIDataAndRender(seciliHatId, true);
+    }, 30000);
+
     // ── FAB → Route Detail ──
     fabBtn.addEventListener('click', () => {
         if (navigator.vibrate) navigator.vibrate(20);
-        TransitAPI.saveSelection({ ...TransitAPI.getSelection(), seciliHat: seciliHatId, kullaniciDurakIndex });
+        TransitAPI.saveSelection({ ...TransitAPI.getSelection(), hatId: seciliHatId, kullaniciDurakIndex });
         const container = document.getElementById('appContainer');
         document.body.classList.add('transitioning');
         container.classList.add('page-transition-out');

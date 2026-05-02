@@ -17,27 +17,23 @@ let kilitliHatId = null;
 let kilitliHatAdi = null;
 
 // ── Autocomplete ──
-async function setupAutocomplete(inputId, dropdownId, containerId, mode) {
+function setupAutocomplete(inputId, dropdownId, containerId, mode) {
     const input = document.getElementById(inputId);
     const dropdown = document.getElementById(dropdownId);
     const container = document.getElementById(containerId);
 
-    // Fetch from Java Backend with timeout
     let tumDuraklar = [];
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
-        const response = await fetch('http://localhost:8080/api/stops', { signal: controller.signal });
-        clearTimeout(timeout);
-        if (response.ok) {
-            tumDuraklar = await response.json();
-        }
-    } catch (e) {
-        console.warn("Backend unavailable, using local data.", e);
-    }
-
-    // Fallback: use local TransitData
-    if (tumDuraklar.length === 0 && typeof TransitData !== 'undefined') {
+    
+    function populateDuraklar() {
+        if (tumDuraklar.length > 0) return;
+        if (typeof TransitAPI !== 'undefined' && TransitAPI.gercekDuraklar && TransitAPI.gercekDuraklar.length > 0) {
+            tumDuraklar = TransitAPI.gercekDuraklar.map(d => ({
+                stopName: d.stopName || d.stop_name || d.id,
+                lineId: d.lineId || "L01",
+                lineName: (typeof TransitData !== 'undefined' && TransitData.hatlar[d.lineId]) ? TransitData.hatlar[d.lineId].ad : (d.lineId || "L01"),
+                stopId: d.stopId || d.id
+            }));
+        } else if (typeof TransitData !== 'undefined') {
         Object.entries(TransitData.hatlar).forEach(([hatId, hat]) => {
             hat.duraklar.forEach((durakAdi, idx) => {
                 const stopIds = TransitData.durakStopIdMap[hatId];
@@ -49,10 +45,12 @@ async function setupAutocomplete(inputId, dropdownId, containerId, mode) {
                 });
             });
         });
-        console.log("✅ Loaded", tumDuraklar.length, "stops from local TransitData");
+        console.log("✅ Loaded", tumDuraklar.length, "stops for autocomplete");
+        }
     }
 
     input.addEventListener('input', function () {
+        populateDuraklar();
         const q = this.value.toLowerCase();
         if (q.length < 1 || tumDuraklar.length === 0) {
             dropdown.style.display = 'none';
@@ -176,7 +174,11 @@ function navigateWithTransition(url) {
 }
 
 // ═══ INIT ═══
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Wait for backend stops to load before setting up autocomplete
+    if (typeof TransitAPI !== 'undefined' && TransitAPI.initPromise) {
+        try { await TransitAPI.initPromise; } catch(e) { console.warn('Backend init failed, using local data'); }
+    }
     setupAutocomplete('start-input', 'start-dropdown', 'start-container', 'baslangic');
     setupAutocomplete('end-input', 'end-dropdown', 'end-container', 'bitis');
     updateClock();
@@ -222,17 +224,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnNext) {
         btnNext.addEventListener('click', async (e) => {
             e.preventDefault();
-            const baslangic = document.getElementById('start-input').value;
-            const varis = document.getElementById('end-input').value;
+            const baslangic = document.getElementById('start-input').value.trim();
+            const varis = document.getElementById('end-input').value.trim();
 
             if (!baslangic || !varis) {
                 if (!baslangic) {
                     const box = document.querySelector('#start-container .glass-input-box');
-                    if (box) box.classList.add('shake');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
                 }
                 if (!varis) {
                     const box = document.querySelector('#end-container .glass-input-box');
-                    if (box) box.classList.add('shake');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
                 }
                 setTimeout(() => {
                     document.querySelectorAll('.shake').forEach(el => el.classList.remove('shake'));
@@ -240,27 +242,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // --- Invalid Input Validation ---
+            // --- Auto-Lock Line if manually typed ---
+            if (!kilitliHatId && baslangic) {
+                if (typeof TransitAPI !== 'undefined') {
+                    const hatlar = TransitAPI.getDurakHatlari(baslangic);
+                    if (hatlar.length > 0) {
+                        kilitliHatId = hatlar[0].hatId;
+                    }
+                }
+            }
+
+            // --- Build comprehensive valid stop list (backend + local) ---
             let validStops = [];
             if (typeof TransitAPI !== 'undefined') {
-                validStops = TransitAPI.getTumDuraklar().map(d => d.toLowerCase());
+                // Include backend API stops
+                if (TransitAPI.gercekDuraklar && TransitAPI.gercekDuraklar.length > 0) {
+                    TransitAPI.gercekDuraklar.forEach(d => {
+                        const name = d.stopName || d.stop_name || d.id;
+                        if (name) validStops.push(name.toLowerCase());
+                    });
+                }
+                // Also include local TransitData stops
+                if (typeof TransitData !== 'undefined') {
+                    Object.values(TransitData.hatlar).forEach(hat => 
+                        hat.duraklar.forEach(d => validStops.push(d.toLowerCase()))
+                    );
+                }
+                validStops = [...new Set(validStops)];
             } else if (typeof TransitData !== 'undefined') {
                 const set = new Set();
                 Object.values(TransitData.hatlar).forEach(hat => hat.duraklar.forEach(d => set.add(d.toLowerCase())));
                 validStops = [...set];
             }
 
-            const isStartValid = validStops.includes(baslangic.trim().toLowerCase());
-            const isEndValid = validStops.includes(varis.trim().toLowerCase());
+            const isStartValid = validStops.includes(baslangic.toLowerCase());
+            
+            // Destination validation: try locked line first, then fallback to all lines
+            let isEndValid = false;
+            if (kilitliHatId && typeof TransitData !== 'undefined' && TransitData.hatlar[kilitliHatId]) {
+                const lockedLineStops = TransitData.hatlar[kilitliHatId].duraklar.map(d => d.toLowerCase());
+                isEndValid = lockedLineStops.includes(varis.toLowerCase());
+            }
+            // Fallback: check all lines if locked line didn't match
+            if (!isEndValid) {
+                isEndValid = validStops.includes(varis.toLowerCase());
+            }
 
             if (!isStartValid || !isEndValid) {
                 if (!isStartValid) {
                     const box = document.querySelector('#start-container .glass-input-box');
-                    if (box) box.classList.add('shake');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
                 }
                 if (!isEndValid) {
                     const box = document.querySelector('#end-container .glass-input-box');
-                    if (box) box.classList.add('shake');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
                 }
                 setTimeout(() => {
                     document.querySelectorAll('.shake').forEach(el => el.classList.remove('shake'));
@@ -270,33 +305,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Save selection
             if (typeof TransitAPI !== 'undefined') {
-                let finalStopId = null;
-                try {
-                    const response = await fetch('http://localhost:8080/api/stops');
-                    if (response.ok) {
-                        const duraklar = await response.json();
-                        const bulunan = duraklar.find(d =>
-                            d.stopName &&
-                            baslangic &&
-                            d.stopName.trim().toLowerCase() === baslangic.trim().toLowerCase() &&
-                            d.lineId === kilitliHatId
-                        );
-                        if (bulunan) finalStopId = bulunan.stopId;
-                    }
-                } catch (e) {
-                    // Use local stopId
-                    finalStopId = TransitAPI.getStopId(baslangic, kilitliHatId);
-                }
-
-                if (!finalStopId) {
-                    finalStopId = TransitAPI.getStopId(baslangic, kilitliHatId);
-                }
+                let finalStopId = TransitAPI.getStopId(baslangic, kilitliHatId);
+                let targetStopId = TransitAPI.getStopId(varis, kilitliHatId);
 
                 TransitAPI.saveSelection({
                     baslangic,
                     varis,
                     hatId: kilitliHatId,
                     stopId: finalStopId,
+                    destinationId: targetStopId,
                     simHour: isSimulationActive ? simHour : null,
                     simMinute: isSimulationActive ? simMinute : null
                 });
