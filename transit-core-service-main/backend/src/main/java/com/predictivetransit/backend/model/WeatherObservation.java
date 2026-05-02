@@ -4,6 +4,10 @@ import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
 
+/**
+ * WeatherObservation Entity: Stores historical weather data.
+ * Used by the AI model to correlate weather conditions with transit delays.
+ */
 @Entity
 @Table(name = "weather_observations")
 @Data
@@ -11,13 +15,13 @@ public class WeatherObservation {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id; // Veritabanı için otomatik artan ID
+    private Long id; // Auto-incremented primary key for the database
 
-    private LocalDateTime timestamp; // weather_observations.csv -> timestamp
+    private LocalDateTime timestamp; // Maps to CSV: timestamp
     
-    private double temperature; // weather_observations.csv -> temperature
+    private double temperature; // Maps to CSV: temperature
     
-    private double precipitation; // weather_observations.csv -> precipitation
+    private double precipitation; // Maps to CSV: precipitation
     
-    private double windSpeed; // weather_observations.csv -> wind_speed
+    private double windSpeed; // Maps to CSV: wind_speed
 }

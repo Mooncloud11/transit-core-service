@@ -1,10 +1,9 @@
 // =========================================
-//  SCRIPT.JS – Ana Sayfa: Hat Kilitleme + Bağımlı Dropdown
-//  Başlangıç durağı seçildiğinde bitiş listesi aynı hattaki
-//  durakları gösterir. 62 durak, 5 hat.
+//  SCRIPT.JS – Home Page
+//  Line locking + dependent dropdown + simulation
+//  Backend fallback to local TransitData
 // =========================================
 
-// Saat güncelle
 function updateClock() {
     const now = new Date();
     const h = now.getHours().toString().padStart(2, '0');
@@ -13,30 +12,47 @@ function updateClock() {
     if (el) el.textContent = `${h}:${m}`;
 }
 
-// ── Hat kilitleme durumu ──
+// ── Line lock state ──
 let kilitliHatId = null;
 let kilitliHatAdi = null;
 
 // ── Autocomplete ──
-async function setupAutocomplete(inputId, dropdownId, containerId, mode) {
+function setupAutocomplete(inputId, dropdownId, containerId, mode) {
     const input = document.getElementById(inputId);
     const dropdown = document.getElementById(dropdownId);
     const container = document.getElementById(containerId);
 
-    // DİKKAT: Verileri Java'dan alıyoruz
     let tumDuraklar = [];
-    try {
-        const response = await fetch('http://localhost:8080/api/stops'); // Kendi API yoluna göre değiştir
-        if(response.ok) {
-           tumDuraklar = await response.json();
+    
+    function populateDuraklar() {
+        if (tumDuraklar.length > 0) return;
+        if (typeof TransitAPI !== 'undefined' && TransitAPI.gercekDuraklar && TransitAPI.gercekDuraklar.length > 0) {
+            tumDuraklar = TransitAPI.gercekDuraklar.map(d => ({
+                stopName: d.stopName || d.stop_name || d.id,
+                lineId: d.lineId || "L01",
+                lineName: (typeof TransitData !== 'undefined' && TransitData.hatlar[d.lineId]) ? TransitData.hatlar[d.lineId].ad : (d.lineId || "L01"),
+                stopId: d.stopId || d.id
+            }));
+        } else if (typeof TransitData !== 'undefined') {
+        Object.entries(TransitData.hatlar).forEach(([hatId, hat]) => {
+            hat.duraklar.forEach((durakAdi, idx) => {
+                const stopIds = TransitData.durakStopIdMap[hatId];
+                tumDuraklar.push({
+                    stopName: durakAdi,
+                    lineId: hatId,
+                    lineName: hat.ad,
+                    stopId: stopIds ? stopIds[idx] : `${hatId}-${idx}`
+                });
+            });
+        });
+        console.log("✅ Loaded", tumDuraklar.length, "stops for autocomplete");
         }
-    } catch(e) {
-        console.error("Java Backend bağlantı hatası!", e);
     }
 
-    input.addEventListener('input', function() {
+    input.addEventListener('input', function () {
+        populateDuraklar();
         const q = this.value.toLowerCase();
-        if (q.length < 2 || tumDuraklar.length === 0) {
+        if (q.length < 1 || tumDuraklar.length === 0) {
             dropdown.style.display = 'none';
             dropdown.innerHTML = '';
             return;
@@ -45,88 +61,78 @@ async function setupAutocomplete(inputId, dropdownId, containerId, mode) {
 
         let durakListesi = [];
         if (mode === 'bitis' && kilitliHatId) {
-            // ═══ HAT KİLİTLEME: Sadece aynı hattaki (lineId) durakları göster ═══
             durakListesi = tumDuraklar.filter(d => d.lineId === kilitliHatId);
         } else {
             durakListesi = tumDuraklar;
         }
 
-        // İsme göre filtrele (stopName)
-        const filtreli = durakListesi.filter(d => 
-             d.stopName && d.stopName.toLowerCase().includes(q)
+        const filtreli = durakListesi.filter(d =>
+            d.stopName && d.stopName.toLowerCase().includes(q)
         );
-        
-        // Tekrar eden isimleri temizle (Sadece benzersiz durak isimleri kalsın)
-        const benzersizFiltreli = [];
-        const map = new Map();
+
+        // Unique stop names
+        const benzersiz = [];
+        const seen = new Map();
         for (const item of filtreli) {
-            if(!map.has(item.stopName)){
-                map.set(item.stopName, true);
-                benzersizFiltreli.push(item);
+            if (!seen.has(item.stopName)) {
+                seen.set(item.stopName, true);
+                benzersiz.push(item);
             }
         }
 
         dropdown.innerHTML = '';
 
-        if (benzersizFiltreli.length > 0) {
-            benzersizFiltreli.forEach(durak => {
+        if (benzersiz.length > 0) {
+            benzersiz.forEach(durak => {
                 const li = document.createElement('li');
-                li.textContent = durak.stopName; // <--- stopName KULLANILDI
+                li.textContent = durak.stopName;
 
-                // Hangi hatlarda geçtiğini bul ve göster (Aynı isimli durakların hatlarını birleştir)
                 const hatlar = tumDuraklar.filter(d => d.stopName === durak.stopName).map(d => d.lineId);
-                
+
                 if (hatlar.length > 0) {
                     const badge = document.createElement('span');
-                    badge.style.cssText = 'font-size:10px;color:#888;margin-left:8px;';
-                    // Benzersiz hatları virgülle ayırarak yazdır
-                    badge.textContent = [...new Set(hatlar)].join(', '); 
+                    badge.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.35);margin-left:8px;';
+                    badge.textContent = [...new Set(hatlar)].join(', ');
                     li.appendChild(badge);
                 }
 
-                li.addEventListener('click', function() {
-                    input.value = durak.stopName; // <--- stopName KULLANILDI
+                li.addEventListener('click', function () {
+                    input.value = durak.stopName;
                     dropdown.style.display = 'none';
-
                     if (mode === 'baslangic') {
-                        onBaslangicSecildi(durak.stopName, hatlar[0]); // İlk hattı gönder
+                        onBaslangicSecildi(durak.stopName, hatlar[0]);
                     }
                 });
                 dropdown.appendChild(li);
             });
         } else {
             if (mode === 'bitis' && kilitliHatId) {
-                dropdown.innerHTML = `<li style="color:#888;cursor:default;">Bu hatta "${q}" içeren durak yok</li>`;
+                dropdown.innerHTML = `<li style="color:rgba(255,255,255,0.35);cursor:default;">No stop matching "${q}" on this line</li>`;
             } else {
-                dropdown.innerHTML = '<li style="color:#888;cursor:default;">Durak bulunamadı</li>';
+                dropdown.innerHTML = '<li style="color:rgba(255,255,255,0.35);cursor:default;">Stop not found</li>';
             }
         }
     });
 
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function (e) {
         if (!container.contains(e.target)) dropdown.style.display = 'none';
     });
 }
 
-// ═══════════════════════════════════════════
-//  BAŞLANGIÇ DURAĞ SEÇİLDİĞİNDE HAT KİLİTLE
-// ═══════════════════════════════════════════
+// ═══ LINE LOCK ═══
 function onBaslangicSecildi(durakAdi, hatId) {
     const endInput = document.getElementById('end-input');
     const hatLockBanner = document.getElementById('hatLockBanner');
 
     if (hatId) {
         kilitliHatId = hatId;
-        // Eğer TransitData.hatlar hala data.js'den geliyorsa adını oradan bul
         const hat = (typeof TransitData !== 'undefined' && TransitData.hatlar) ? TransitData.hatlar[hatId] : null;
         kilitliHatAdi = hat ? hat.ad : hatId;
 
-        // Bitiş inputunu sıfırla ve aktifleştir
         endInput.value = '';
         endInput.disabled = false;
-        endInput.placeholder = `${kilitliHatAdi} hattında varış durağı seçin`;
+        endInput.placeholder = `Search on ${kilitliHatAdi}...`;
 
-        // Hat kilidi banner
         if (hatLockBanner) {
             hatLockBanner.innerHTML = `
                 <span class="lock-icon">🔒</span>
@@ -134,7 +140,7 @@ function onBaslangicSecildi(durakAdi, hatId) {
                 <button class="lock-clear" id="clearLock">✕</button>
             `;
             hatLockBanner.style.display = 'flex';
-            if(hat) hatLockBanner.style.borderLeftColor = hat.renk;
+            if (hat) hatLockBanner.style.borderLeftColor = hat.renk;
 
             document.getElementById('clearLock').addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -143,7 +149,7 @@ function onBaslangicSecildi(durakAdi, hatId) {
         }
     } else {
         kilitliHatId = null;
-        endInput.placeholder = 'Varış Noktası';
+        endInput.placeholder = 'Search...';
     }
 }
 
@@ -156,11 +162,10 @@ function clearHatLock() {
 
     startInput.value = '';
     endInput.value = '';
-    endInput.placeholder = 'Varış Noktası';
+    endInput.placeholder = 'Search...';
     if (hatLockBanner) hatLockBanner.style.display = 'none';
 }
 
-// Sayfa geçiş animasyonu
 function navigateWithTransition(url) {
     const container = document.getElementById('appContainer');
     document.body.classList.add('transitioning');
@@ -168,17 +173,20 @@ function navigateWithTransition(url) {
     setTimeout(() => { window.location.href = url; }, 400);
 }
 
-// Başlat
-document.addEventListener('DOMContentLoaded', () => {
-    // DİKKAT: Artık async olduğu için fonksiyon içindeki API isteğini bekler
+// ═══ INIT ═══
+document.addEventListener('DOMContentLoaded', async () => {
+    // Wait for backend stops to load before setting up autocomplete
+    if (typeof TransitAPI !== 'undefined' && TransitAPI.initPromise) {
+        try { await TransitAPI.initPromise; } catch(e) { console.warn('Backend init failed, using local data'); }
+    }
     setupAutocomplete('start-input', 'start-dropdown', 'start-container', 'baslangic');
     setupAutocomplete('end-input', 'end-dropdown', 'end-container', 'bitis');
     updateClock();
     setInterval(updateClock, 30000);
 
-    // ── Simülasyon UI Eventleri ──
-    const simToggle = document.getElementById('simToggle');
-    const simSliderContainer = document.getElementById('simSliderContainer');
+    // ── Simulation ──
+    const simToggleMain = document.getElementById('simToggleMain');
+    const simControls = document.getElementById('simControls');
     const simTimeSlider = document.getElementById('simTimeSlider');
     const simTimeDisplay = document.getElementById('simTimeDisplay');
 
@@ -186,18 +194,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let simHour = 12;
     let simMinute = 0;
 
-    if (simToggle) {
-        simToggle.addEventListener('change', function() {
+    if (simToggleMain) {
+        simToggleMain.addEventListener('change', function () {
             isSimulationActive = this.checked;
-            simSliderContainer.style.display = isSimulationActive ? 'block' : 'none';
-            if (isSimulationActive) {
+            if (simControls) simControls.style.display = isSimulationActive ? 'flex' : 'none';
+            if (isSimulationActive && simTimeSlider) {
                 updateSimDisplay(simTimeSlider.value);
             }
         });
     }
 
     if (simTimeSlider) {
-        simTimeSlider.addEventListener('input', function() {
+        simTimeSlider.addEventListener('input', function () {
             updateSimDisplay(this.value);
         });
     }
@@ -206,49 +214,106 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalMinutes = parseInt(val, 10);
         simHour = Math.floor(totalMinutes / 60);
         simMinute = totalMinutes % 60;
-        simTimeDisplay.textContent = `${simHour.toString().padStart(2, '0')}:${simMinute.toString().padStart(2, '0')}`;
+        if (simTimeDisplay) {
+            simTimeDisplay.textContent = `${simHour.toString().padStart(2, '0')}:${simMinute.toString().padStart(2, '0')}`;
+        }
     }
 
+    // ── Find Route Button ──
     const btnNext = document.getElementById('btnNext');
     if (btnNext) {
         btnNext.addEventListener('click', async (e) => {
             e.preventDefault();
-            const baslangic = document.getElementById('start-input').value;
-            const varis = document.getElementById('end-input').value;
+            const baslangic = document.getElementById('start-input').value.trim();
+            const varis = document.getElementById('end-input').value.trim();
 
             if (!baslangic || !varis) {
-                if (!baslangic) document.getElementById('start-input').parentElement.classList.add('shake');
-                if (!varis) document.getElementById('end-input').parentElement.classList.add('shake');
+                if (!baslangic) {
+                    const box = document.querySelector('#start-container .glass-input-box');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
+                }
+                if (!varis) {
+                    const box = document.querySelector('#end-container .glass-input-box');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
+                }
                 setTimeout(() => {
                     document.querySelectorAll('.shake').forEach(el => el.classList.remove('shake'));
                 }, 600);
                 return;
             }
 
-            // Seçimi kaydet (map sayfası kullanacak)
-            // TransitAPI hala varsa oraya kaydet, yoksa localStorage kullan
-            if(typeof TransitAPI !== 'undefined') {
-                 // Stop Id'yi bulmak için güncellenmiş mantık (stopName ve lineId'ye göre)
-                 let finalStopId = null;
-                 try {
-                     const response = await fetch('http://localhost:8080/api/stops'); 
-                     if(response.ok) {
-                        const duraklar = await response.json();
-                        const bulunanDurak = duraklar.find(d => 
-                             d.stopName && 
-                             baslangic && 
-                             d.stopName.trim().toLowerCase() === baslangic.trim().toLowerCase() && 
-                             d.lineId === kilitliHatId
-                        );
-                        if(bulunanDurak) finalStopId = bulunanDurak.stopId;
-                     }
-                 } catch(e) {}
+            // --- Auto-Lock Line if manually typed ---
+            if (!kilitliHatId && baslangic) {
+                if (typeof TransitAPI !== 'undefined') {
+                    const hatlar = TransitAPI.getDurakHatlari(baslangic);
+                    if (hatlar.length > 0) {
+                        kilitliHatId = hatlar[0].hatId;
+                    }
+                }
+            }
+
+            // --- Build comprehensive valid stop list (backend + local) ---
+            let validStops = [];
+            if (typeof TransitAPI !== 'undefined') {
+                // Include backend API stops
+                if (TransitAPI.gercekDuraklar && TransitAPI.gercekDuraklar.length > 0) {
+                    TransitAPI.gercekDuraklar.forEach(d => {
+                        const name = d.stopName || d.stop_name || d.id;
+                        if (name) validStops.push(name.toLowerCase());
+                    });
+                }
+                // Also include local TransitData stops
+                if (typeof TransitData !== 'undefined') {
+                    Object.values(TransitData.hatlar).forEach(hat => 
+                        hat.duraklar.forEach(d => validStops.push(d.toLowerCase()))
+                    );
+                }
+                validStops = [...new Set(validStops)];
+            } else if (typeof TransitData !== 'undefined') {
+                const set = new Set();
+                Object.values(TransitData.hatlar).forEach(hat => hat.duraklar.forEach(d => set.add(d.toLowerCase())));
+                validStops = [...set];
+            }
+
+            const isStartValid = validStops.includes(baslangic.toLowerCase());
+            
+            // Destination validation: try locked line first, then fallback to all lines
+            let isEndValid = false;
+            if (kilitliHatId && typeof TransitData !== 'undefined' && TransitData.hatlar[kilitliHatId]) {
+                const lockedLineStops = TransitData.hatlar[kilitliHatId].duraklar.map(d => d.toLowerCase());
+                isEndValid = lockedLineStops.includes(varis.toLowerCase());
+            }
+            // Fallback: check all lines if locked line didn't match
+            if (!isEndValid) {
+                isEndValid = validStops.includes(varis.toLowerCase());
+            }
+
+            if (!isStartValid || !isEndValid) {
+                if (!isStartValid) {
+                    const box = document.querySelector('#start-container .glass-input-box');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
+                }
+                if (!isEndValid) {
+                    const box = document.querySelector('#end-container .glass-input-box');
+                    if (box) { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
+                }
+                setTimeout(() => {
+                    document.querySelectorAll('.shake').forEach(el => el.classList.remove('shake'));
+                }, 600);
+                return;
+            }
+
+            // Save selection
+            if (typeof TransitAPI !== 'undefined') {
+                let finalStopId = TransitAPI.getStopId(baslangic, kilitliHatId);
+                let targetStopId = TransitAPI.getStopId(varis, kilitliHatId);
 
                 TransitAPI.saveSelection({
                     baslangic,
                     varis,
                     hatId: kilitliHatId,
-                    stopId: finalStopId, 
+                    stopId: finalStopId,
+                    destinationId: targetStopId,
                     simHour: isSimulationActive ? simHour : null,
                     simMinute: isSimulationActive ? simMinute : null
                 });

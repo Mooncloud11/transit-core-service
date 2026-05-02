@@ -1,25 +1,32 @@
 package com.predictivetransit.backend.model;
 
- // Burayı kendi paket adına göre düzelt
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Data;
 
+/**
+ * BusStop Entity: Represents a bus stop in the transit system.
+ * This class is mapped to the "bus_stops" table in the database.
+ */
 @Entity
 @Table(name = "bus_stops")
-@Data // Getter, Setter ve ToString'i otomatik oluşturur
+@Data // Automatically generates Getters, Setters, and ToString via Lombok
 public class BusStop {
 
     @Id
-    private String stopId;   // bus_stops.csv -> stop_id
-    
-    private String stopName; // bus_stops.csv -> stop_name
-    
-    private double stopLat;  // bus_stops.csv -> stop_lat
-    
-    private double stopLon;  // bus_stops.csv -> stop_lon
-    
-    private String lineId;   // bus_stops.csv -> line_id
+    @JsonIgnore
+    private String id;
+
+    private String stopId;
+
+    private String stopName;
+
+    private double stopLat;
+
+    private double stopLon;
+
+    private String lineId;
 }

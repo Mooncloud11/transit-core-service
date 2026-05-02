@@ -8,6 +8,6 @@ backend/mvnw.cmd
 .vscode/
 .fake
 .env
-ai-engine/.env
-data/
+# H2 Database files
 *.mv.db
+*.trace.db
