@@ -37,7 +37,6 @@ import java.util.function.Function;
 @Slf4j
 @Service
 public class PredictionService {
-    private static final int MAX_AI_ATTEMPTS = 2;
 
     private final PredictionResponseNormalizer responseNormalizer;
     private final RestClient restClient;
@@ -132,45 +131,31 @@ public class PredictionService {
     private Map<String, Object> callAiWithRetry(Function<UriBuilder, URI> uriFactory) {
         List<String> errors = new ArrayList<>();
 
-        for (int attempt = 1; attempt <= MAX_AI_ATTEMPTS; attempt++) {
-            try {
-                Map result = restClient.get()
-                        .uri(uriBuilder -> {
-                            UriBuilder baseBuilder = uriBuilder
-                                    .scheme("http")
-                                    .host(extractHost(PYTHON_AI_URL))
-                                    .port(extractPort(PYTHON_AI_URL));
-                            return uriFactory.apply(baseBuilder);
-                        })
-                        .retrieve()
-                        .body(Map.class);
+        try {
+            Map result = restClient.get()
+                    .uri(uriBuilder -> {
+                        UriBuilder baseBuilder = uriBuilder
+                                .scheme("http")
+                                .host(extractHost(PYTHON_AI_URL))
+                                .port(extractPort(PYTHON_AI_URL));
+                        return uriFactory.apply(baseBuilder);
+                    })
+                    .retrieve()
+                    .body(Map.class);
 
-                if (result != null) {
-                    return result;
-                }
-            } catch (HttpClientErrorException e) {
-                errors.add("HTTP " + e.getStatusCode().value());
-                if (e.getStatusCode().is4xxClientError() && e.getStatusCode().value() != 429) {
-                    break;
-                }
-            } catch (ResourceAccessException e) {
-                errors.add("Resource access: " + e.getMessage());
-            } catch (Exception e) {
-                errors.add("Unexpected: " + e.getMessage());
+            if (result != null) {
+                return result;
             }
-
-            if (attempt < MAX_AI_ATTEMPTS) {
-                try {
-                    Thread.sleep(150L * attempt);
-                } catch (InterruptedException interruptedException) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
+        } catch (HttpClientErrorException e) {
+            errors.add("HTTP " + e.getStatusCode().value());
+        } catch (ResourceAccessException e) {
+            errors.add("Resource access: " + e.getMessage());
+        } catch (Exception e) {
+            errors.add("Unexpected: " + e.getMessage());
         }
 
         if (!errors.isEmpty()) {
-            log.warn("AI call failed after {} attempt(s): {}", MAX_AI_ATTEMPTS, String.join(" | ", errors));
+            log.warn("AI call failed: {}", String.join(" | ", errors));
         }
         return null;
     }

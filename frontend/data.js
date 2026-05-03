@@ -6,11 +6,11 @@
 
 const TransitData = {
     hatlar: {
-        L01: { id: "L01", ad: "Merkez - Üniversite", renk: "#4A90D9", duraklar: ["Merkez Terminal", "Belediye Meydanı", "Cumhuriyet Caddesi", "Atatürk Bulvarı", "Hürriyet Parkı", "Gül Mahallesi", "Çamlık Durağı", "Yeni Mahalle", "Sağlık Ocağı", "Kültür Merkezi", "Stadyum", "Rektörlük", "Mühendislik Fakültesi", "Üniversite Kampüsü"], aktifOtobus: { mevcutDurakIndex: 4, yogunluk: "red" }, tahminiSure: 3 },
-        L02: { id: "L02", ad: "Sanayi - Hastane", renk: "#FF9500", duraklar: ["Sanayi Sitesi", "Fabrikalar Bölgesi", "İş Merkezi", "Organize Sanayi", "Köprübaşı", "Pazar Yeri", "Adliye", "Emniyet Müdürlüğü", "Devlet Hastanesi", "Acil Servis", "Hastane Ana Giriş"], aktifOtobus: { mevcutDurakIndex: 6, yogunluk: "yellow" }, tahminiSure: 5 },
-        L03: { id: "L03", ad: "Bağlar - Çarşı", renk: "#34C759", duraklar: ["Bağlar Mahallesi", "Bağlar Parkı", "Kooperatif", "Otogar", "PTT", "Çarşı Girişi", "Kapalı Çarşı", "Büyük Cami", "Çarşı Merkez"], aktifOtobus: { mevcutDurakIndex: 3, yogunluk: "green" }, tahminiSure: 8 },
-        L04: { id: "L04", ad: "Esentepe - Meydan", renk: "#AF52DE", duraklar: ["Esentepe Terminal", "Esentepe Parkı", "Yıldız Mahallesi", "Güneş Sokak", "Bahçelievler", "Zafer Caddesi", "Kışla", "Spor Salonu", "AVM", "Postane", "Hükümet Konağı", "Meydan"], aktifOtobus: { mevcutDurakIndex: 5, yogunluk: "yellow" }, tahminiSure: 6 },
-        L05: { id: "L05", ad: "Terminal - Kampüs", renk: "#FF3B30", duraklar: ["Şehirlerarası Terminal", "Terminal Çıkışı", "Yeni Yol", "Kavşak", "Sanayi Kavşağı", "Demir Çelik", "Lojmanlar", "İlkokul", "Ortaokul", "Lise", "Dershane Sokak", "Yurt", "Spor Tesisleri", "Kütüphane", "Kampüs Girişi", "Kampüs Merkez"], aktifOtobus: { mevcutDurakIndex: 7, yogunluk: "red" }, tahminiSure: 4 }
+        L01: { id: "L01", ad: "Center - University", renk: "#4A90D9", duraklar: ['Central Terminal', 'City Hall Square', 'Republic Avenue', 'Ataturk Boulevard', 'Liberty Park', 'Gul Neighborhood', 'Camlik Stop', 'New Neighborhood', 'Health Center', 'Cultural Center', 'Stadium', 'Rectorate', 'Faculty of Engineering', 'University Campus'], aktifOtobus: { mevcutDurakIndex: 4, yogunluk: "red" }, tahminiSure: 3 },
+        L02: { id: "L02", ad: "Industry - Hospital", renk: "#FF9500", duraklar: ['Industrial Site', 'Factories Zone', 'Business Center', 'Organized Industry', 'Bridgehead', 'Market Place', 'Courthouse', 'Police Headquarters', 'State Hospital', 'Emergency Service', 'Hospital Main Entrance'], aktifOtobus: { mevcutDurakIndex: 6, yogunluk: "yellow" }, tahminiSure: 5 },
+        L03: { id: "L03", ad: "Baglar - Bazaar", renk: "#34C759", duraklar: ['Baglar Neighborhood', 'Baglar Park', 'Cooperative', 'Bus Station', 'PTT', 'Bazaar Entrance', 'Grand Bazaar', 'Grand Mosque', 'Bazaar Center'], aktifOtobus: { mevcutDurakIndex: 3, yogunluk: "green" }, tahminiSure: 8 },
+        L04: { id: "L04", ad: "Esentepe - Square", renk: "#AF52DE", duraklar: ['Esentepe Terminal', 'Esentepe Park', 'Yildiz Neighborhood', 'Gunes Street', 'Bahcelievler', 'Victory Avenue', 'Barracks', 'Sports Hall', 'Shopping Mall', 'Post Office', 'Government House', 'Square'], aktifOtobus: { mevcutDurakIndex: 5, yogunluk: "yellow" }, tahminiSure: 6 },
+        L05: { id: "L05", ad: "Terminal - Campus", renk: "#FF3B30", duraklar: ['Intercity Terminal', 'Terminal Exit', 'New Road', 'Intersection', 'Industrial Junction', 'Iron & Steel', 'Staff Housing', 'Primary School', 'Middle School', 'High School', 'Private Course Street', 'Dormitory', 'Sports Facilities', 'Library', 'Campus Entrance', 'Campus Center'], aktifOtobus: { mevcutDurakIndex: 7, yogunluk: "red" }, tahminiSure: 4 }
     },
 
     // Hat – StopID eşleştirme tablosu (CSV'deki stop_id'ler ile eşleşir)
@@ -74,13 +74,13 @@ const TransitAPI = {
     getTumDuraklar: function () {
         if (this.gercekDuraklar && this.gercekDuraklar.length > 0) {
             const apiDuraklar = this.gercekDuraklar.map(d => d.stopName || d.stop_name || d.id);
-            if (apiDuraklar.length > 0 && apiDuraklar[0] !== "Bilinmeyen Durak") {
-                return [...new Set(apiDuraklar)].sort((a, b) => a.localeCompare(b, 'tr'));
+            if (apiDuraklar.length > 0 && apiDuraklar[0] !== "Unknown Stop") {
+                return [...new Set(apiDuraklar)].sort((a, b) => a.localeCompare(b, 'en'));
             }
         }
         const set = new Set();
         Object.values(TransitData.hatlar).forEach(hat => hat.duraklar.forEach(d => set.add(d)));
-        return [...set].sort((a, b) => a.localeCompare(b, 'tr'));
+        return [...set].sort((a, b) => a.localeCompare(b, 'en'));
     },
 
     // ── Durak Hangi Hatlarda ──

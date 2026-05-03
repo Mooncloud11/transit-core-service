@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         hatBadge.textContent = hat.id;
         hatBadge.style.background = renk;
-        const sure = hat.tahminiSure ?? '—';
+        const sure = hat.tahminiSure !== undefined && hat.tahminiSure !== null ? Math.round(hat.tahminiSure) : '—';
         etaTime.innerHTML = `${sure}<span class="min">min</span>`;
         routeTimeline.style.setProperty('--hat-renk', renk);
         routeTimeline.innerHTML = '';
@@ -139,6 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isPassed = i <= busIdx;
             const isBus = i === busIdx;
             const isUser = i === kullaniciDurakIndex;
+            const isDestination = selection.varis && durakAdi === selection.varis;
 
             const node = document.createElement('div');
             node.className = 'stop-node animated';
@@ -150,13 +151,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (isBus) { marker.classList.add('bus-loc'); marker.innerHTML = '🚌'; }
             else if (isUser) { marker.classList.add('user-loc', `crowd-${yogunluk}`); }
+            else if (isDestination) { marker.classList.add('destination-loc'); marker.innerHTML = '🏁'; }
             else if (isPassed) { marker.classList.add('passed'); }
             else { marker.classList.add('remaining'); }
 
             const label = document.createElement('span');
             label.className = 'stop-label';
             label.textContent = durakAdi;
-            if (isBus || isUser) label.classList.add('highlight');
+            if (isBus || isUser || isDestination) label.classList.add('highlight');
 
             node.appendChild(marker);
             node.appendChild(label);
@@ -294,9 +296,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         ]);
 
         // Apply AI prediction data
-        if (aiData && aiData.real_time_delay_min !== undefined) {
-            TransitData.hatlar[hatId].tahminiSure = aiData.real_time_delay_min;
-
+        if (aiData) {
+            let etaToDisplay = aiData.real_time_delay_min;
+            const hasBusPassedUser = (aiData.current_bus_stop_index !== undefined) && (aiData.current_bus_stop_index >= kullaniciDurakIndex);
+            
+            if (hasBusPassedUser && nextBusData && nextBusData.next_buses && nextBusData.next_buses.length > 0) {
+                etaToDisplay = nextBusData.next_buses[0].estimated_arrival_min;
+            } else if (aiData.stop_etas && aiData.stop_etas.length > kullaniciDurakIndex) {
+                etaToDisplay = aiData.stop_etas[kullaniciDurakIndex];
+            }
+            
+            TransitData.hatlar[hatId].tahminiSure = etaToDisplay !== undefined ? Math.round(etaToDisplay) : '—';
+            
             const colorMap = { 'red': 'red', 'yellow': 'yellow', 'green': 'green' };
             const statusColor = (aiData.status_color || '').toLowerCase();
             TransitData.hatlar[hatId].aktifOtobus.yogunluk = colorMap[statusColor] || 'yellow';
@@ -339,11 +350,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ── Initial load ──
     loadAIDataAndRender(seciliHatId);
 
-    // ── Background Polling (30s) ──
+    // ── Background Polling (120s) ──
     setInterval(() => {
         console.log("🔄 Background polling for map data...");
         loadAIDataAndRender(seciliHatId, true);
-    }, 30000);
+    }, 120000);
 
     // ── FAB → Route Detail ──
     fabBtn.addEventListener('click', () => {

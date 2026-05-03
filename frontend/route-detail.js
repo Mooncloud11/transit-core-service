@@ -40,6 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const renk = hat.renk || '#FFFFFF';
     let aiStopEtas = null;
     let isMockEta = false;
+    let userEtaNextBus = null;
+    let isUserPassed = false;
 
     // ── Header ──
     if (hatNameEl) hatNameEl.textContent = `${hat.id} ${hat.ad}`;
@@ -54,9 +56,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (aiData.current_bus_stop_index !== undefined) {
                 busIdx = aiData.current_bus_stop_index;
             }
-            if (aiData.real_time_delay_min !== undefined) {
-                if (hatMetaEl) hatMetaEl.textContent = `${hat.duraklar.length} stops • Est. ${aiData.real_time_delay_min} min`;
+            // ETA logic for header
+            let etaToDisplay = aiData.real_time_delay_min;
+            const hasBusPassedUser = (aiData.current_bus_stop_index !== undefined) && (aiData.current_bus_stop_index >= kullaniciDurakIdx);
+            isUserPassed = hasBusPassedUser;
+            
+            if (hasBusPassedUser) {
+                // If it passed, the bus will depart from start every 12 mins. This is a local frontend estimation if we don't hit the API.
+                const now = new Date();
+                const currentMin = now.getMinutes();
+                const timeUntilDeparture = 12 - (currentMin % 12);
+                etaToDisplay = timeUntilDeparture + (kullaniciDurakIdx * 3.5) + (aiData.real_time_delay_min || 0);
+                userEtaNextBus = etaToDisplay;
+            } else if (aiData.stop_etas && aiData.stop_etas.length > kullaniciDurakIdx) {
+                etaToDisplay = aiData.stop_etas[kullaniciDurakIdx];
+                userEtaNextBus = etaToDisplay;
             }
+
+            if (etaToDisplay !== undefined) {
+                if (hatMetaEl) hatMetaEl.textContent = `${hat.duraklar.length} stops • Est. ${Math.round(etaToDisplay)} min`;
+            }
+
             const colorMap = { 'red': 'red', 'yellow': 'yellow', 'green': 'green' };
             const statusColor = (aiData.status_color || '').toLowerCase();
             if (colorMap[statusColor]) {
@@ -81,11 +101,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     loadAITahmin();
 
-    // ── Background Polling (30s) ──
+    // ── Background Polling (120s) ──
     setInterval(() => {
         console.log("🔄 Background polling for route-detail data...");
         loadAITahmin();
-    }, 30000);
+    }, 120000);
 
     // ── Toggle Search ──
     if (searchToggleBtn && searchBarContainer) {
@@ -112,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const isPassed = i <= busIdx;
             const isBus = i === busIdx;
             const isUser = i === kullaniciDurakIdx;
+            const isDestination = selection.varis && durakAdi === selection.varis;
             const isLast = i === hat.duraklar.length - 1;
 
             // Filter
@@ -124,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- Left: Stop Name ---
             const leftDiv = document.createElement('div');
             leftDiv.className = 'detail-stop-name-left';
-            if (isBus || isUser) leftDiv.classList.add('highlight');
+            if (isBus || isUser || isDestination) leftDiv.classList.add('highlight');
             leftDiv.innerHTML = durakAdi.replace(' ', '<br>'); // Mockup has line breaks for long words
             row.appendChild(leftDiv);
 
@@ -140,6 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 dot.innerHTML = '🚌';
             } else if (isUser) {
                 dot.classList.add('user', `crowd-${yogunluk}`);
+            } else if (isDestination) {
+                dot.classList.add('destination');
+                dot.innerHTML = '🏁';
             } else if (isPassed) {
                 dot.classList.add('passed');
             }
@@ -161,6 +185,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Dynamic time calculation based on AI ETAs
             let timeText = '';
             if(isBus) timeText = '0 min';
+            else if (isUser && isUserPassed) {
+                timeText = userEtaNextBus !== null ? `${Math.round(userEtaNextBus)} min` : '•••';
+            }
             else if (i > busIdx) {
                 if (aiStopEtas === null) {
                     timeText = '•••'; // Skeleton loader state

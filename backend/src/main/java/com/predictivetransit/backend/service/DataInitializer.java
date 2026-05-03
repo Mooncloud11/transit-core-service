@@ -74,7 +74,7 @@ public class DataInitializer implements CommandLineRunner {
             throw new IllegalArgumentException("Invalid day_of_week value: " + dayOfWeek);
         }
 
-        LocalDate referenceWeekStart = LocalDate.of(2025, 1, 6);
+        LocalDate referenceWeekStart = LocalDate.now().with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
 
         return referenceWeekStart
                 .plusDays(dayOfWeek)
@@ -132,31 +132,6 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private List<BusStop> parseBusStops(String path) {
-        // Map stop names to line IDs to match frontend expectations
-        java.util.Map<String, String[]> stopNamesMap = new java.util.HashMap<>();
-        stopNamesMap.put("L01",
-                new String[] { "Central Terminal", "City Hall Square", "Republic Avenue", "Ataturk Boulevard",
-                        "Liberty Park", "Gul Neighborhood", "Camlik Stop", "New Neighborhood", "Health Center",
-                        "Cultural Center", "Stadium", "Rectorate", "Faculty of Engineering", "University Campus" });
-        stopNamesMap.put("L02",
-                new String[] { "Industrial Site", "Factories Zone", "Business Center", "Organized Industry",
-                        "Bridgehead",
-                        "Market Place", "Courthouse", "Police Headquarters", "State Hospital", "Emergency Service",
-                        "Hospital Main Entrance" });
-        stopNamesMap.put("L03",
-                new String[] { "Baglar Neighborhood", "Baglar Park", "Cooperative", "Bus Station", "PTT",
-                        "Bazaar Entrance", "Grand Bazaar", "Grand Mosque", "Bazaar Center" });
-        stopNamesMap.put("L04",
-                new String[] { "Esentepe Terminal", "Esentepe Park", "Yildiz Neighborhood", "Gunes Street",
-                        "Bahcelievler",
-                        "Victory Avenue", "Barracks", "Sports Hall", "Shopping Mall", "Post Office", "Government House",
-                        "Square" });
-        stopNamesMap.put("L05",
-                new String[] { "Intercity Terminal", "Terminal Exit", "New Road", "Intersection", "Industrial Junction",
-                        "Iron & Steel", "Staff Housing", "Primary School", "Middle School", "High School",
-                        "Private Course Street", "Dormitory",
-                        "Sports Facilities", "Library", "Campus Entrance", "Campus Center" });
-
         try (BufferedReader br = openDataFile(path)) {
             br.readLine(); // Skip the CSV header row.
             String line;
@@ -175,13 +150,7 @@ public class DataInitializer implements CommandLineRunner {
                     String recordId = lineId + "::" + stopId;
                     int sequence = Integer.parseInt(v[3]);
 
-                    String stopName = "unknown stop";
-                    if (stopNamesMap.containsKey(lineId)) {
-                        String[] names = stopNamesMap.get(lineId);
-                        if (sequence > 0 && sequence <= names.length) {
-                            stopName = names[sequence - 1];
-                        }
-                    }
+                    String stopName = (v.length > 13) ? v[13] : "unknown stop";
 
                     // Skip duplicate rows in the source file.
                     if (!seenRecordIds.add(recordId)) {
@@ -199,7 +168,7 @@ public class DataInitializer implements CommandLineRunner {
                     count++;
                 } catch (Exception e) {
                     errorCount++;
-                    if (errorCount == 1) {
+                    if (errorCount <= 5) {
                         System.out.println("Bus stop parsing error example: " + e.getMessage());
                         System.out.println("Invalid bus stop row: " + line);
                     }
@@ -235,7 +204,7 @@ public class DataInitializer implements CommandLineRunner {
                     count++;
                 } catch (Exception e) {
                     errorCount++;
-                    if (errorCount == 1) {
+                    if (errorCount <= 5) {
                         System.out.println("Weather parsing error example: " + e.getMessage());
                         System.out.println("Invalid weather row: " + line);
                     }
@@ -273,8 +242,7 @@ public class DataInitializer implements CommandLineRunner {
                     count++;
                 } catch (Exception e) {
                     errorCount++;
-                    // Only log the first error to avoid terminal clutter
-                    if (errorCount == 1) {
+                    if (errorCount <= 5) {
                         System.out.println("Passenger flow parsing error example: " + e.getMessage());
                         System.out.println("Invalid row: " + line);
                     }
